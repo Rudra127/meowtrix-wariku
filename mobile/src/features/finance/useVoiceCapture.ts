@@ -25,7 +25,7 @@ import {
   type AudioRecorder,
   type RecordingOptions,
 } from 'expo-audio';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { voiceApi } from '@/api/endpoints';
 import type { TransactionDraft, TransactionInput, VoiceCaptureResult } from '@/api/types';
 import { useApi } from '@/api/useApi';
@@ -68,6 +68,10 @@ export function useVoiceCapture() {
   const [drafts, setDrafts] = useState<EditableDraft[]>([]);
   /** Set when the OS denied the mic, so the UI can point at Settings instead of retrying. */
   const [permissionDenied, setPermissionDenied] = useState(false);
+  /** True while `start()` is mid-setup. Refs, not state: these are read inside async callbacks. */
+  const startingRef = useRef(false);
+  /** Set when the button is released before `start()` got as far as actually recording. */
+  const releasedEarlyRef = useRef(false);
 
   const reset = useCallback(() => {
     setStage('idle');
@@ -86,6 +90,12 @@ export function useVoiceCapture() {
   }, []);
 
   const start = useCallback(async () => {
+    // Starting is async (permissions, audio mode, prepare). Without this latch a second press while
+    // the first is still in flight reaches `recorder.record()` on a recorder that is already
+    // recording, which throws IllegalStateException on Android.
+    if (startingRef.current || recorder.getStatus().isRecording) return false;
+    startingRef.current = true;
+    releasedEarlyRef.current = false;
     setError(null);
     try {
       const existing = await getRecordingPermissionsAsync();
@@ -104,6 +114,15 @@ export function useVoiceCapture() {
       // iOS routes audio differently for playback vs recording; without this the file is empty.
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await prepareRecorder(recorder);
+
+      // The button may already have been released while we were setting up. Starting now would
+      // leave a recording running with nothing left to stop it.
+      if (releasedEarlyRef.current) {
+        setStage('idle');
+        setError('Hold the button and say what you spent.');
+        return false;
+      }
+
       recorder.record();
       setStage('recording');
       return true;
@@ -111,12 +130,26 @@ export function useVoiceCapture() {
       setError(getErrorMessage(err, "Couldn't start recording."));
       setStage('idle');
       return false;
+    } finally {
+      startingRef.current = false;
     }
   }, [recorder]);
 
   /** Stops, uploads, and moves to review. Pass `discard` to throw the clip away. */
   const stop = useCallback(
     async ({ discard = false }: { discard?: boolean } = {}) => {
+      // Released before `start()` finished setting up. Flag it so `start()` abandons the take instead
+      // of leaving a recording running that this call can't yet see.
+      if (startingRef.current) {
+        releasedEarlyRef.current = true;
+        return;
+      }
+      // Nothing running (a stray press-out, or the OS reclaimed the session).
+      if (!recorder.getStatus().isRecording) {
+        setStage('idle');
+        return;
+      }
+
       const duration = recorderState.durationMillis;
       try {
         await recorder.stop();

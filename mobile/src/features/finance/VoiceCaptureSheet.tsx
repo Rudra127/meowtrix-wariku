@@ -30,7 +30,8 @@ export function VoiceCaptureSheet({ visible, onClose, currency, speechEnabled, o
   const [showTyping, setShowTyping] = useState(!speechEnabled);
 
   const close = () => {
-    if (capture.isRecording) capture.stop({ discard: true });
+    // Unconditional: closing mid-setup must also abandon the take. `stop()` is safe in every state.
+    capture.stop({ discard: true });
     capture.reset();
     setTyped('');
     setShowTyping(!speechEnabled);
@@ -47,8 +48,10 @@ export function VoiceCaptureSheet({ visible, onClose, currency, speechEnabled, o
     await capture.start();
   };
 
+  // Always hand the release to the hook, even when `isRecording` is still false: on a quick tap the
+  // button is let go while start() is still preparing, and the hook needs to know to abandon the take.
+  // Guarding on `isRecording` here used to leave that recording running with nothing able to stop it.
   const pressOut = async () => {
-    if (!capture.isRecording) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await capture.stop();
   };

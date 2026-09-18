@@ -32,24 +32,69 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 /** A file picked from the device, in the shape React Native's FormData expects. */
 export type UploadFile = { uri: string; name: string; type: string };
 
+/** Raised by the multipart path so the caller can tell a timeout from a transport failure. */
+class UploadTimeout extends Error {}
+
+/**
+ * Multipart uploads go through `XMLHttpRequest`, not `fetch`.
+ *
+ * Expo SDK 57's global `fetch` is Expo's WinterCG implementation, and it accepts a FormData part
+ * only as a string, a real `Blob`, or something exposing `.bytes()`. React Native's
+ * `{ uri, name, type }` file shape is explicitly unsupported there and throws
+ * "Unsupported FormDataPart implementation" before the request leaves the device.
+ *
+ * React Native's own XHR does understand `{ uri, ... }` — it is the long-standing RN upload path,
+ * and it streams the file from disk instead of loading it into JS memory. Using it avoids pulling in
+ * expo-file-system (native code, and therefore a dev-client rebuild) purely to convert a local file
+ * into a Blob.
+ */
+function sendMultipart(path: string, token: string | null, form: FormData, timeoutMs: number): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}${path}`);
+    xhr.timeout = timeoutMs;
+    xhr.setRequestHeader('Accept', 'application/json');
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    // Content-Type is deliberately not set: React Native fills in multipart/form-data plus the
+    // boundary, and overriding it produces a body the server can't parse.
+
+    xhr.onload = () => {
+      // Rebuild a real Response so `parse()` works the same for both transports. A null-body status
+      // must not be given a body, or the Response constructor throws.
+      const nullBody = xhr.status === 204 || xhr.status === 205 || xhr.status === 304;
+      resolve(new Response(nullBody ? null : xhr.responseText || null, { status: xhr.status }));
+    };
+    xhr.onerror = () => reject(new Error('The upload could not be sent'));
+    xhr.ontimeout = () => reject(new UploadTimeout('Upload timed out'));
+    xhr.onabort = () => reject(new Error('The upload was cancelled'));
+
+    try {
+      xhr.send(form);
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  });
+}
+
 async function send(path: string, token: string | null, { method = 'GET', body, timeoutMs }: RequestOptions) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  // React Native sets the multipart boundary itself — setting Content-Type by hand breaks the upload.
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const limit = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timer = isFormData ? null : setTimeout(() => controller.abort(), limit);
   try {
+    if (isFormData) return await sendMultipart(path, token, body as FormData, limit);
     return await fetch(`${API_URL}${path}`, {
       method,
       headers: {
         Accept: 'application/json',
-        ...(body !== undefined && !isFormData && { 'Content-Type': 'application/json' }),
+        ...(body !== undefined && { 'Content-Type': 'application/json' }),
         ...(token && { Authorization: `Bearer ${token}` }),
       },
-      body: body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
   } catch (err) {
-    if (controller.signal.aborted) {
+    if (controller.signal.aborted || err instanceof UploadTimeout) {
       throw new ApiError(0, 'TIMEOUT', 'The server took too long to respond.', err);
     }
 
@@ -83,7 +128,7 @@ async function send(path: string, token: string | null, { method = 'GET', body, 
     }
     throw new ApiError(0, 'NETWORK_ERROR', `Can't reach the server (${API_URL}). Is the backend running?`, err);
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 

@@ -9,6 +9,10 @@ Read the root [`AGENTS.md`](../AGENTS.md) first for product context and repo-wid
 > - `Tabs` is imported from **`expo-router/js-tabs`** (the `expo-router` export is deprecated).
 > - Tab bar icon `color` is a `ColorValue`, not `string`.
 > - Use `npx expo install <pkg>` (not `npm install`) so native package versions match the SDK.
+> - **The global `fetch` is Expo's WinterCG fetch, not React Native's.** It rejects React Native's
+>   `{ uri, name, type }` file shape in FormData with "Unsupported FormDataPart implementation"
+>   (see `expo/src/winter/fetch/convertFormData.ts`). File uploads therefore go through
+>   `XMLHttpRequest` in `src/api/client.ts` — do not "simplify" that back to `fetch`.
 > - **Every route group needs its own `_layout.tsx`.** `<Stack.Screen name="(onboarding)">` in the root layout only
 >   matches if `app/(onboarding)/_layout.tsx` exists; otherwise the route is registered as `(onboarding)/<file>`,
 >   the guard has nothing to show, and the screen is blank (warning: "No route named … exists").
@@ -186,7 +190,15 @@ export function useLearningPath() {
 }
 ```
 
-- `useApi()` attaches a fresh Clerk session token to every request and retries once on 401.
+- `useApi()` attaches a fresh Clerk session token to every request and retries once on 401. Uploads
+  are the exception: a file-backed body can't be replayed, so they request a fresh token up front and
+  get no retry.
+- **Uploads** (`api.postForm`) use `XMLHttpRequest`, because Expo's global `fetch` can't send a
+  `file://` URI (see the SDK note at the top). Don't set `Content-Type` on them: React Native adds
+  `multipart/form-data` plus the boundary, and overriding it yields a body the server can't parse.
+- When a request fails at the transport layer the client probes `GET /health` before choosing a
+  message, so "Is the backend running?" only appears when the server really is unreachable. In dev the
+  underlying cause is logged to Metro as `[api] <METHOD> <path> failed`.
 - Errors are `ApiError { status, code, message }`; `status === 0` means network error/timeout. Show them with
   `getErrorMessage(error)`.
 - The query cache is cleared whenever the signed-in user changes (root layout) — no cross-account leaks.

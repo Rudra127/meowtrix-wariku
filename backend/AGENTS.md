@@ -28,19 +28,21 @@ backend/
 │   ├── auth.js               GET /auth/me, POST /auth/sync
 │   ├── user.js               PATCH/DELETE /users/me, GET /admin/users
 │   ├── ai.js                 POST /ai/chat
-│   ├── learn.js              GET /learn/path, /learn/stats, /learn/lessons/:slug, POST check + submit
+│   ├── learn.js              GET /learn/path, /learn/stats, /learn/lessons/:slug,
+│   │                         POST check + submit + practice + practice/:id/submit
 │   └── webhooks.js           POST /webhooks/clerk (raw body, Svix-verified)
 ├── services/                 Business logic; throws AppErrors; returns plain data
 │   ├── user-service.js       Onboarding + cascade delete (fans out to feature deleteAllForUser)
 │   ├── ai-service.js         System prompt (personalised by level/goal) + message validation
-│   └── learn-service.js      Path + grading + XP/streak (pure helpers exported for tests)
+│   ├── learn-service.js      Path + grading + XP/streak (pure helpers exported for tests)
+│   └── practice-service.js   AI practice generation + HARD validation of the model's JSON
 ├── lib/deepseek.js           DeepSeek client (the only file that talks to the LLM provider)
 ├── database/
-│   ├── connection.js
+│   ├── connection.js         Also honours DNS_SERVERS for networks that block SRV lookups
 │   ├── models/               user.js (exports LEVELS/GOALS) + learn models (unit, lesson,
-│   │                         lesson-progress, learner-stats)
+│   │                         lesson-progress, learner-stats, practice-session)
 │   ├── repository/           ALL Mongoose queries live here (user-repository, learn-repository)
-│   └── seed/                 learn-content.js (units + lessons) + seed-learn.js runner
+│   └── seed/                 learn-content.js (8 units / 33 lessons) + seed-learn.js runner
 ├── middlewares/
 │   ├── protect.js            Requires a Clerk session → sets req.user (Mongo doc)
 │   ├── isAdmin.js            After protect; requires req.user.role === "admin"
@@ -97,11 +99,38 @@ All under `/api/v1`. All return the standard envelope.
 | GET | `/learn/lessons/:slug` | protect | — | `{ lesson: { id, unitId, unitTitle, title, summary, xp, minutes, icon, exercises: [{ type, prompt, options? }] }, progress\|null, status }` — **answers/explanations stripped**; locked lessons → 403 |
 | POST | `/learn/lessons/:slug/check` | protect | `{ index, answer }` | `{ index, isCorrect, correctAnswer, explanation }` — instant feedback for one question in the player; **stores nothing** (XP/progress only change on submit, which re-grades every answer) |
 | POST | `/learn/lessons/:slug/submit` | protect | `{ answers: unknown[] }` (one per exercise, in order) | `{ score, correct, total, passed, xpEarned, totalXpForLesson, results: [{ index, isCorrect, correctAnswer, explanation }], stats }` — graded server-side; `xpEarned` is the delta added this submit (retries only earn improvement) |
+| POST | `/learn/lessons/:slug/practice` | protect + aiLimiter | `{ count?: 1-5 }` (default 4) | `{ sessionId, lesson: { id, title }, exercises: [{ type, prompt, options? }], model }` — DeepSeek generates fresh questions on the lesson's topic; **answers stay server-side** on the session. Locked lessons → 403, no key → 503 |
+| POST | `/learn/practice/:sessionId/check` | protect | `{ index, answer }` | `{ index, isCorrect, correctAnswer, explanation }` — instant feedback inside a practice round; **stores nothing** (same contract as the lesson `check` route) |
+| POST | `/learn/practice/:sessionId/submit` | protect | `{ answers: unknown[] }` (one per generated exercise) | `{ score, correct, total, passed, xpEarned, results, stats }` — **single-use**; awards 2 XP per correct answer and keeps the streak alive, but never completes a lesson or unlocks the next one |
 | POST | `/webhooks/clerk` | Svix signature | Clerk event | `{ received }` |
 
 Error codes in use: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` /
 `BAD_REQUEST` / `DUPLICATE` 400, `PAYLOAD_TOO_LARGE` 413, `RATE_LIMITED` 429, `INTERNAL_ERROR` 500,
 `UPSTREAM_ERROR` 502, `SERVICE_UNAVAILABLE` 503, `BAD_SIGNATURE` 400 (webhook).
+
+## AI-generated practice (`services/practice-service.js`)
+
+**Model output is untrusted input.** Everything DeepSeek returns goes through
+`parseGeneratedExercises`, which validates each candidate against the exact exercise contract in
+`models/lesson.js` and **discards** anything that doesn't fit — wrong type, answer index out of
+range, duplicate options, an `order_steps` answer that isn't a permutation, and so on. If nothing
+survives, the route fails with `UPSTREAM_ERROR` rather than serving a broken question. When you
+add an exercise type, update the validator and `EXERCISE_TYPES` together or generated questions
+of that type will be silently dropped.
+
+Two more things worth knowing:
+
+- **Answers never reach the client.** A generated round is persisted as a `PracticeSession` with
+  the answers attached, and the client only gets `sessionId` + answer-stripped exercises. Grading
+  reuses the same `gradeLesson` path as authored lessons. Sessions are single-use and a TTL index
+  drops them ~24h after creation, so the collection self-cleans.
+- **Practice can't replace lessons.** It updates streak, `todayXp` and accuracy, but never
+  `lessonsDone` or `LessonProgress` — so no amount of practice unlocks the next lesson, and the
+  XP rate (2/correct) stays below doing the real thing.
+
+`buildPracticePrompt` asks for `count + 2` questions so validation drop-outs don't leave the round
+short, and uses DeepSeek's JSON mode (`jsonMode: true` in `lib/deepseek.js`). JSON mode requires
+the word "JSON" in the prompt — a test asserts that, so don't remove it.
 
 ## Adding a feature (e.g. `learn`)
 

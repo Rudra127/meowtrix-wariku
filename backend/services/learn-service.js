@@ -11,9 +11,17 @@ import { DEFAULT_DAILY_GOAL_XP } from "../database/models/learner-stats.js";
 import { EXERCISE_TYPES } from "../database/models/lesson.js";
 import LearnRepository from "../database/repository/learn-repository.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../utils/index.js";
+import PracticeService from "./practice-service.js";
 
 /** Score >= this counts as passing a lesson (used for status + streak eligibility). */
 export const PASS_THRESHOLD = 0.6;
+
+/**
+ * XP per correct answer in an AI practice round. Deliberately small: practice keeps the
+ * streak alive and nudges accuracy, but it must never be a faster path to XP than doing
+ * real lessons (a 5-question round caps at 10 XP vs 20–50 for a lesson).
+ */
+export const PRACTICE_XP_PER_CORRECT = 2;
 
 /** Onboarding goal → recommended unit slug. Keep in sync with mobile options.ts. */
 export const GOAL_TO_UNIT_SLUG = {
@@ -216,8 +224,9 @@ const publicExercise = (ex) => ({
 // ---- Service ---------------------------------------------------------------------------
 
 export default class LearnService {
-  constructor(repository = new LearnRepository()) {
+  constructor(repository = new LearnRepository(), practiceService = new PracticeService()) {
     this.repository = repository;
+    this.practiceService = practiceService;
   }
 
   /** GET /learn/path — path + stats in the shape the mobile UI already renders. */
@@ -380,6 +389,120 @@ export default class LearnService {
     };
   }
 
+  // -- AI practice ---------------------------------------------------------------------
+
+  /**
+   * POST /learn/practice/:sessionId/check — instant feedback for one question in a practice
+   * round, mirroring `checkAnswer` for lessons. Stores nothing: XP and stats only move on
+   * `submitPractice`, which re-grades every answer from the session.
+   */
+  async checkPracticeAnswer(user, sessionId, body = {}) {
+    if (!sessionId || typeof sessionId !== "string") throw new ValidationError("Missing session id");
+    const { index, answer } = body;
+    const session = await this.repository.findPracticeSession(user._id, sessionId);
+    if (!session) throw new NotFoundError("Practice session not found or expired");
+    if (!Number.isInteger(index) || index < 0 || index >= session.exercises.length) {
+      throw new ValidationError(`\`index\` must be an integer between 0 and ${session.exercises.length - 1}`);
+    }
+    const exercise = session.exercises[index];
+    return {
+      index,
+      isCorrect: gradeAnswer(exercise, answer),
+      correctAnswer: exercise.answer,
+      explanation: exercise.explanation ?? "",
+    };
+  }
+
+  /**
+   * POST /learn/lessons/:slug/practice — generates fresh exercises on the lesson's topic
+   * via DeepSeek and opens a practice session.
+   *
+   * Answers are stored server-side on the session (never sent to the client), so the round
+   * is graded exactly like an authored lesson. Locked lessons are rejected.
+   *
+   * @returns {{ sessionId, lesson: { id, title }, exercises: PublicExercise[], model }}
+   */
+  async generatePractice(user, slug, { count } = {}) {
+    if (!slug || typeof slug !== "string") throw new ValidationError("Missing lesson slug");
+    const lesson = await this.repository.findLessonBySlug(slug);
+    if (!lesson) throw new NotFoundError("Lesson not found");
+
+    const status = await this._statusForLesson(user, lesson);
+    if (status === "locked") {
+      throw new ForbiddenError("Finish the lessons before this one to unlock it.");
+    }
+
+    const units = await this.repository.listUnits();
+    const unit = units.find((u) => String(u._id) === String(lesson.unitId));
+
+    const { exercises, model } = await this.practiceService.generate({
+      lesson,
+      unitTitle: unit?.title ?? "",
+      count,
+      level: user.level,
+    });
+
+    const session = await this.repository.createPracticeSession({
+      userId: user._id,
+      lessonId: lesson._id,
+      exercises,
+      model,
+    });
+
+    return {
+      sessionId: String(session._id),
+      lesson: { id: lesson.slug, title: lesson.title },
+      exercises: exercises.map(publicExercise),
+      model,
+    };
+  }
+
+  /**
+   * POST /learn/practice/:sessionId/submit — grades a practice round.
+   *
+   * Practice affects streak, todayXp and accuracy, but never `lessonsDone` or LessonProgress:
+   * only real lessons count as completions, so practice can't unlock the next lesson.
+   * Sessions are single-use.
+   */
+  async submitPractice(user, sessionId, body = {}) {
+    if (!sessionId || typeof sessionId !== "string") throw new ValidationError("Missing session id");
+    const session = await this.repository.findPracticeSession(user._id, sessionId);
+    if (!session) throw new NotFoundError("Practice session not found or expired");
+    if (session.status === "completed") {
+      throw new ValidationError("This practice round has already been submitted");
+    }
+
+    const graded = gradeLesson({ exercises: session.exercises }, body.answers);
+    const xpEarned = graded.correct * PRACTICE_XP_PER_CORRECT;
+
+    session.status = "completed";
+    session.score = graded.score;
+    session.correct = graded.correct;
+    session.total = graded.total;
+    session.xpEarned = xpEarned;
+    session.completedAt = new Date();
+    await session.save();
+
+    const stats = await this.repository.getOrCreateStats(user._id);
+    refreshDailyCounters(stats);
+    applyStreakOnSubmit(stats);
+    stats.xp += xpEarned;
+    stats.todayXp += xpEarned;
+    stats.totalAnswers += graded.total;
+    stats.correctAnswers += graded.correct;
+    await stats.save();
+
+    return {
+      score: graded.score,
+      correct: graded.correct,
+      total: graded.total,
+      passed: graded.passed,
+      xpEarned,
+      results: graded.results,
+      stats: formatStats(stats),
+    };
+  }
+
   // -- private (underscore prefix; not enforced by the language) --------------------
 
   async _statusForLesson(user, lesson) {
@@ -403,6 +526,7 @@ export default class LearnService {
     await Promise.all([
       this.repository.deleteAllProgressForUser(userId),
       this.repository.deleteStatsForUser(userId),
+      this.repository.deleteAllPracticeForUser(userId),
     ]);
   }
 }

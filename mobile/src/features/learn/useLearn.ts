@@ -75,3 +75,47 @@ export function useCheckAnswer(slug: string) {
     mutationFn: ({ index, answer }: { index: number; answer: LessonAnswer }) => learnApi.check(api, slug, index, answer),
   });
 }
+
+/**
+ * POST /learn/lessons/:slug/practice — ask DeepSeek for fresh questions on this lesson's topic.
+ *
+ * Slow (a real LLM round-trip, up to ~90s) and rate limited to 20/min per user, so trigger it
+ * from an explicit user action and show a loading state. `data.sessionId` is what you submit
+ * the answers against; `data.exercises` are answer-stripped like a normal lesson.
+ * Rounds are single-use and expire server-side after ~24h.
+ */
+export function useGeneratePractice(slug: string) {
+  const api = useApi();
+  return useMutation({
+    mutationFn: (count?: number) => learnApi.generatePractice(api, slug, count),
+  });
+}
+
+/**
+ * POST /learn/practice/:sessionId/check — instant feedback for one practice question.
+ * Mirrors `useCheckAnswer`; stores nothing server-side.
+ */
+export function useCheckPracticeAnswer() {
+  const api = useApi();
+  return useMutation({
+    mutationFn: ({ sessionId, index, answer }: { sessionId: string; index: number; answer: LessonAnswer }) =>
+      learnApi.checkPractice(api, sessionId, index, answer),
+  });
+}
+
+/**
+ * POST /learn/practice/:sessionId/submit — grade a practice round.
+ * Awards a small XP bonus and keeps the streak alive, so `learn.all` is invalidated to
+ * refresh stats. Never completes a lesson or unlocks the next one.
+ */
+export function useSubmitPractice() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, answers }: { sessionId: string; answers: LessonAnswer[] }) =>
+      learnApi.submitPractice(api, sessionId, answers),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.learn.all });
+    },
+  });
+}

@@ -74,6 +74,7 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
       <Stack.Protected guard={!!isSignedIn && !needsOnboarding}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="lesson/[slug]" options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+        <Stack.Screen name="practice/[slug]" options={{ animation: 'slide_from_right', gestureEnabled: true }} />
       </Stack.Protected>
       <Stack.Protected guard={needsOnboarding}>
         <Stack.Screen name="(onboarding)" />

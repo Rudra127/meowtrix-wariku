@@ -123,3 +123,26 @@ export type LessonSubmitResult = {
   results: ExerciseResult[];
   stats: LearnerStats;
 };
+
+// ---- AI practice rounds --------------------------------------------------------------
+// Extra questions generated on demand by DeepSeek for a lesson's topic. The exercises come
+// back answer-stripped just like a normal lesson; grade them by posting the answers back
+// with the `sessionId`. Sessions are single-use and expire server-side after ~24h.
+
+export type PracticeSession = {
+  sessionId: string;
+  lesson: { id: string; title: string };
+  exercises: PublicExercise[];
+  model: string;
+};
+
+export type PracticeSubmitResult = {
+  score: number;
+  correct: number;
+  total: number;
+  passed: boolean;
+  /** Small bonus (2 XP per correct answer) — practice never completes a lesson. */
+  xpEarned: number;
+  results: ExerciseResult[];
+  stats: LearnerStats;
+};

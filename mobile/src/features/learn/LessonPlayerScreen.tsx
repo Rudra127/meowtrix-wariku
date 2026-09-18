@@ -173,6 +173,7 @@ export function LessonPlayerScreen({ slug }: Props) {
         statsBefore={startStats}
         onRetry={retry}
         onDone={router.back}
+        onPractice={() => router.replace(`/practice/${slug}`)}
       />
     );
   }

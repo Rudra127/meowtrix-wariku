@@ -56,6 +56,11 @@ export function LearnScreen() {
     router.push(`/lesson/${slug}`);
   };
 
+  const startPractice = (slug: string) => {
+    setSelected(null);
+    router.push(`/practice/${slug}`);
+  };
+
   let nodeIndex = 0;
 
   return (
@@ -227,7 +232,7 @@ export function LearnScreen() {
 
       {path.data && <AchievementsRow stats={stats} />}
 
-      <LessonSheet lesson={selected} onClose={() => setSelected(null)} onStart={startLesson} />
+      <LessonSheet lesson={selected} onClose={() => setSelected(null)} onStart={startLesson} onPractice={startPractice} />
       <Sheet visible={placementOpen} onClose={() => setPlacementOpen(false)} title="Placement check">
         <AppText variant="body" color={colors.textMuted}>
           A short quiz that unlocks lessons you already know, so {level.label.toLowerCase()} learners don&rsquo;t repeat the basics.
@@ -260,7 +265,17 @@ function PathSkeleton() {
   );
 }
 
-function LessonSheet({ lesson, onClose, onStart }: { lesson: Lesson | null; onClose: () => void; onStart: (slug: string) => void }) {
+function LessonSheet({
+  lesson,
+  onClose,
+  onStart,
+  onPractice,
+}: {
+  lesson: Lesson | null;
+  onClose: () => void;
+  onStart: (slug: string) => void;
+  onPractice: (slug: string) => void;
+}) {
   const locked = lesson?.status === 'locked';
   return (
     <Sheet visible={!!lesson} onClose={onClose} title={lesson?.title}>
@@ -287,6 +302,15 @@ function LessonSheet({ lesson, onClose, onStart }: { lesson: Lesson | null; onCl
             variant={locked ? 'secondary' : 'primary'}
             onPress={locked ? onClose : () => onStart(lesson.id)}
           />
+          {/* AI practice: unlimited extra questions on this topic, generated on demand. */}
+          {!locked && (
+            <Button
+              title="Practise with AI"
+              variant="secondary"
+              onPress={() => onPractice(lesson.id)}
+              icon={<Ionicons name="sparkles" size={16} color={colors.text} />}
+            />
+          )}
         </>
       )}
     </Sheet>

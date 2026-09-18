@@ -26,6 +26,8 @@ class FakeLearnRepository {
     this.lessons = lessons;
     this.progress = new Map(); // key `${userId}:${lessonId}`
     this.stats = new Map(); // key `${userId}`
+    this.practice = new Map(); // key sessionId
+    this.practiceSeq = 0;
   }
   async listUnits() {
     return this.units.slice().sort((a, b) => a.order - b.order);
@@ -82,6 +84,36 @@ class FakeLearnRepository {
   }
   async deleteStatsForUser(userId) {
     this.stats.delete(String(userId));
+  }
+  async createPracticeSession(fields) {
+    this.practiceSeq += 1;
+    const id = `practice${this.practiceSeq}`;
+    const session = { _id: id, status: "open", xpEarned: 0, ...fields, save: async () => {} };
+    this.practice.set(id, session);
+    return session;
+  }
+  /** Mirrors the real repository's userId scoping. */
+  async findPracticeSession(userId, sessionId) {
+    const session = this.practice.get(sessionId);
+    if (!session || String(session.userId) !== String(userId)) return null;
+    return session;
+  }
+  async deleteAllPracticeForUser(userId) {
+    for (const [id, s] of [...this.practice.entries()]) {
+      if (String(s.userId) === String(userId)) this.practice.delete(id);
+    }
+  }
+}
+
+/** Stub PracticeService that returns canned exercises instead of calling DeepSeek. */
+class FakePracticeService {
+  constructor(exercises) {
+    this.exercises = exercises;
+    this.calls = [];
+  }
+  async generate(args) {
+    this.calls.push(args);
+    return { exercises: this.exercises, model: "deepseek-chat", usage: null };
   }
 }
 
@@ -463,17 +495,189 @@ describe("LearnService.getLesson", () => {
 // ---- LearnService.deleteAllForUser -----------------------------------------------------
 
 describe("LearnService.deleteAllForUser", () => {
-  it("clears progress and stats without touching other users' data", async () => {
+  it("clears progress, stats and practice without touching other users' data", async () => {
     const repo = new FakeLearnRepository(buildFixture());
-    const service = new LearnService(repo);
+    const practice = new FakePracticeService([
+      { type: "true_false", prompt: "p", answer: true, tolerance: 0, explanation: "" },
+    ]);
+    const service = new LearnService(repo, practice);
     await service.submitLesson({ _id: "userA" }, "l1", { answers: [0, true] });
     await service.submitLesson({ _id: "userB" }, "l1", { answers: [0, true] });
+    await service.generatePractice({ _id: "userA" }, "l1", {});
+    await service.generatePractice({ _id: "userB" }, "l1", {});
 
     await service.deleteAllForUser("userA");
     assert.equal((await repo.listProgressForUser("userA")).length, 0);
     assert.equal(await repo.findStats("userA"), null);
+    assert.equal([...repo.practice.values()].filter((s) => s.userId === "userA").length, 0);
+
     assert.equal((await repo.listProgressForUser("userB")).length, 1);
     assert.ok(await repo.findStats("userB"));
+    assert.equal([...repo.practice.values()].filter((s) => s.userId === "userB").length, 1);
+  });
+});
+
+// ---- AI practice rounds ----------------------------------------------------------------
+
+describe("LearnService.generatePractice", () => {
+  const user = { _id: "user1", goal: "budgeting", level: "beginner" };
+  const generated = [
+    { type: "multiple_choice", prompt: "gen q1", options: ["a", "b"], answer: 1, tolerance: 0, explanation: "ge1" },
+    { type: "true_false", prompt: "gen q2", answer: false, tolerance: 0, explanation: "ge2" },
+  ];
+  let repo;
+  let practice;
+  let service;
+
+  beforeEach(() => {
+    repo = new FakeLearnRepository(buildFixture());
+    practice = new FakePracticeService(generated);
+    service = new LearnService(repo, practice);
+  });
+
+  it("opens a session and returns exercises with answers stripped", async () => {
+    const out = await service.generatePractice(user, "l1", {});
+    assert.ok(out.sessionId);
+    assert.equal(out.lesson.id, "l1");
+    assert.equal(out.exercises.length, 2);
+    for (const ex of out.exercises) {
+      assert.equal("answer" in ex, false, "generated answers must not reach the client");
+      assert.equal("explanation" in ex, false);
+      assert.equal("tolerance" in ex, false);
+    }
+    // Answers are kept server-side on the session so the round can be graded.
+    const session = await repo.findPracticeSession(user._id, out.sessionId);
+    assert.equal(session.exercises[0].answer, 1);
+    assert.equal(session.status, "open");
+  });
+
+  it("passes lesson context and the learner's level to the generator", async () => {
+    await service.generatePractice(user, "l1", { count: 3 });
+    const [args] = practice.calls;
+    assert.equal(args.lesson.slug, "l1");
+    assert.equal(args.unitTitle, "Budgeting basics");
+    assert.equal(args.level, "beginner");
+    assert.equal(args.count, 3);
+  });
+
+  it("refuses locked lessons and unknown slugs", async () => {
+    await assert.rejects(service.generatePractice(user, "l2", {}), { code: "FORBIDDEN" });
+    await assert.rejects(service.generatePractice(user, "nope", {}), { code: "NOT_FOUND" });
+  });
+});
+
+describe("LearnService.submitPractice", () => {
+  const user = { _id: "user1", goal: "budgeting" };
+  const generated = [
+    { type: "multiple_choice", prompt: "gen q1", options: ["a", "b"], answer: 1, tolerance: 0, explanation: "ge1" },
+    { type: "true_false", prompt: "gen q2", answer: false, tolerance: 0, explanation: "ge2" },
+  ];
+  let repo;
+  let service;
+
+  beforeEach(() => {
+    repo = new FakeLearnRepository(buildFixture());
+    service = new LearnService(repo, new FakePracticeService(generated));
+  });
+
+  const open = () => service.generatePractice(user, "l1", {});
+
+  it("grades the round and awards 2 XP per correct answer", async () => {
+    const { sessionId } = await open();
+    const res = await service.submitPractice(user, sessionId, { answers: [1, false] });
+    assert.equal(res.correct, 2);
+    assert.equal(res.total, 2);
+    assert.equal(res.score, 1);
+    assert.equal(res.xpEarned, 4); // 2 correct x PRACTICE_XP_PER_CORRECT
+    assert.equal(res.stats.xp, 4);
+    assert.equal(res.results[0].explanation, "ge1");
+  });
+
+  it("awards XP only for the answers that were right", async () => {
+    const { sessionId } = await open();
+    const res = await service.submitPractice(user, sessionId, { answers: [0, false] });
+    assert.equal(res.correct, 1);
+    assert.equal(res.xpEarned, 2);
+  });
+
+  it("keeps the streak alive and tracks accuracy, but never completes a lesson", async () => {
+    const { sessionId } = await open();
+    const res = await service.submitPractice(user, sessionId, { answers: [1, false] });
+    assert.equal(res.stats.streakDays, 1, "practice counts as activity");
+    assert.equal(res.stats.accuracy, 1);
+    assert.equal(res.stats.lessonsDone, 0, "practice must not count as a completed lesson");
+    // No LessonProgress row, so the next lesson stays locked.
+    assert.equal((await repo.listProgressForUser(user._id)).length, 0);
+    await assert.rejects(service.getLesson(user, "l2"), { code: "FORBIDDEN" });
+  });
+
+  it("is single-use", async () => {
+    const { sessionId } = await open();
+    await service.submitPractice(user, sessionId, { answers: [1, false] });
+    await assert.rejects(service.submitPractice(user, sessionId, { answers: [1, false] }), {
+      code: "VALIDATION_ERROR",
+    });
+  });
+
+  it("validates the answers array length", async () => {
+    const { sessionId } = await open();
+    await assert.rejects(service.submitPractice(user, sessionId, { answers: [1] }), { code: "VALIDATION_ERROR" });
+  });
+
+  it("404s for an unknown session id", async () => {
+    await assert.rejects(service.submitPractice(user, "does-not-exist", { answers: [] }), { code: "NOT_FOUND" });
+  });
+
+  it("won't let one user grade another user's session", async () => {
+    const { sessionId } = await open();
+    const other = { _id: "user2", goal: "budgeting" };
+    await assert.rejects(service.submitPractice(other, sessionId, { answers: [1, false] }), { code: "NOT_FOUND" });
+  });
+});
+
+describe("LearnService.checkPracticeAnswer", () => {
+  const user = { _id: "user1", goal: "budgeting" };
+  const generated = [
+    { type: "multiple_choice", prompt: "gen q1", options: ["a", "b"], answer: 1, tolerance: 0, explanation: "ge1" },
+    { type: "true_false", prompt: "gen q2", answer: false, tolerance: 0, explanation: "ge2" },
+  ];
+  let repo;
+  let service;
+
+  beforeEach(() => {
+    repo = new FakeLearnRepository(buildFixture());
+    service = new LearnService(repo, new FakePracticeService(generated));
+  });
+
+  const open = () => service.generatePractice(user, "l1", {});
+
+  it("grades one generated answer and returns the correct answer + explanation", async () => {
+    const { sessionId } = await open();
+    const right = await service.checkPracticeAnswer(user, sessionId, { index: 0, answer: 1 });
+    assert.deepEqual(right, { index: 0, isCorrect: true, correctAnswer: 1, explanation: "ge1" });
+    const wrong = await service.checkPracticeAnswer(user, sessionId, { index: 1, answer: true });
+    assert.equal(wrong.isCorrect, false);
+    assert.equal(wrong.correctAnswer, false);
+  });
+
+  it("stores nothing — the session stays open and no XP moves", async () => {
+    const { sessionId } = await open();
+    await service.checkPracticeAnswer(user, sessionId, { index: 0, answer: 1 });
+    assert.equal((await repo.findPracticeSession(user._id, sessionId)).status, "open");
+    const { stats } = await service.getStats(user);
+    assert.equal(stats.xp, 0);
+  });
+
+  it("validates the index and scopes the session to its owner", async () => {
+    const { sessionId } = await open();
+    for (const index of [-1, 99, 1.5, "0", undefined]) {
+      await assert.rejects(service.checkPracticeAnswer(user, sessionId, { index, answer: 0 }), {
+        code: "VALIDATION_ERROR",
+      });
+    }
+    await assert.rejects(service.checkPracticeAnswer(user, "nope", { index: 0, answer: 0 }), { code: "NOT_FOUND" });
+    const other = { _id: "user2", goal: "budgeting" };
+    await assert.rejects(service.checkPracticeAnswer(other, sessionId, { index: 0, answer: 1 }), { code: "NOT_FOUND" });
   });
 });
 

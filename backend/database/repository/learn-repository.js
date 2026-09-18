@@ -5,6 +5,7 @@
 import LearnerStats from "../models/learner-stats.js";
 import Lesson from "../models/lesson.js";
 import LessonProgress from "../models/lesson-progress.js";
+import PracticeSession from "../models/practice-session.js";
 import Unit from "../models/unit.js";
 
 export default class LearnRepository {
@@ -82,6 +83,22 @@ export default class LearnRepository {
 
   async deleteStatsForUser(userId) {
     const result = await LearnerStats.deleteOne({ userId });
+    return result.deletedCount ?? 0;
+  }
+
+  // ---- AI practice sessions --------------------------------------------------------------
+
+  async createPracticeSession(fields) {
+    return PracticeSession.create(fields);
+  }
+
+  /** Scoped by userId so a session id from another account can never be read or graded. */
+  async findPracticeSession(userId, sessionId) {
+    return PracticeSession.findOne({ _id: sessionId, userId });
+  }
+
+  async deleteAllPracticeForUser(userId) {
+    const result = await PracticeSession.deleteMany({ userId });
     return result.deletedCount ?? 0;
   }
 }

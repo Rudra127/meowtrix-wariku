@@ -22,8 +22,17 @@ inline results with XP + streak) are all live. Next up is content depth (more un
 - Instant feedback per exercise with a one-line explanation. ✅ backend (`/submit` returns `results`)
 - **XP** per lesson, **daily streak**, lesson completion state. ✅ backend
 
-**Later:** hearts/lives, leagues, spaced-repetition review, placement quiz, AI-generated practice questions
-(DeepSeek via backend), personalised path from onboarding goals.
+**Also shipped**
+- **AI-generated practice questions** ✅ backend — `POST /learn/lessons/:slug/practice` asks DeepSeek for
+  fresh questions on a lesson's topic, validates them hard, and opens a single-use `PracticeSession`
+  graded by `POST /learn/practice/:sessionId/submit`. Awards 2 XP per correct answer and feeds the
+  streak, but never completes a lesson. Design notes in `backend/AGENTS.md` → "AI-generated practice".
+  Mobile data layer is ready (`useGeneratePractice` / `useSubmitPractice`); **no UI is wired to it yet**.
+- **Content: 8 units / 33 lessons / 138 exercises**, including India-specific units on UPI & digital
+  payments (incl. PIN-safety and scam spotting), taxes on salary, insurance and retirement.
+
+**Later:** hearts/lives, leagues, spaced-repetition review, placement quiz, personalised path beyond
+"recommended unit first", lesson review mode, "explain this differently" tie-in with Ask AI.
 
 **Shipped models** (`backend/database/models/`)
 ```

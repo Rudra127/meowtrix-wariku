@@ -14,6 +14,8 @@ import type {
   LessonDetail,
   LessonSubmitResult,
   Level,
+  PracticeSession,
+  PracticeSubmitResult,
   User,
 } from './types';
 
@@ -51,4 +53,19 @@ export const learnApi = {
   /** Grade a submission server-side. `answers` is one entry per exercise, in order. */
   submit: (api: ApiClient, slug: string, answers: LessonAnswer[]) =>
     api.post<LessonSubmitResult>(`/learn/lessons/${slug}/submit`, { answers }),
+
+  /**
+   * Generate fresh AI practice questions for a lesson's topic (1–5, default 4).
+   * Hits DeepSeek server-side, so it's slower than the other calls — allow a long timeout.
+   */
+  generatePractice: (api: ApiClient, slug: string, count?: number) =>
+    api.post<PracticeSession>(`/learn/lessons/${slug}/practice`, count ? { count } : {}, { timeoutMs: 90_000 }),
+
+  /** Instant feedback for one question in a practice round (stores nothing). */
+  checkPractice: (api: ApiClient, sessionId: string, index: number, answer: LessonAnswer) =>
+    api.post<AnswerCheck>(`/learn/practice/${sessionId}/check`, { index, answer }),
+
+  /** Grade a practice round. Single-use: a session can only be submitted once. */
+  submitPractice: (api: ApiClient, sessionId: string, answers: LessonAnswer[]) =>
+    api.post<PracticeSubmitResult>(`/learn/practice/${sessionId}/submit`, { answers }),
 };

@@ -21,10 +21,12 @@ type Props = {
   statsBefore?: LearnerStats;
   onRetry: () => void;
   onDone: () => void;
+  /** Start an AI practice round on this lesson's topic. Omit to hide the option. */
+  onPractice?: () => void;
 };
 
 /** Post-submit screen: celebration (or encouragement), XP/streak/goal, and an answer review. */
-export function ResultsView({ result, exercises, answers, lessonTitle, bestCombo = 0, statsBefore, onRetry, onDone }: Props) {
+export function ResultsView({ result, exercises, answers, lessonTitle, bestCombo = 0, statsBefore, onRetry, onDone, onPractice }: Props) {
   const { passed, stats } = result;
   const [pop] = useState(() => new Animated.Value(0));
   const [showReview, setShowReview] = useState(!passed); // failed → show what went wrong right away
@@ -164,7 +166,18 @@ export function ResultsView({ result, exercises, answers, lessonTitle, bestCombo
 
       <View style={styles.footer}>
         {passed ? (
-          <Button title="Continue" onPress={onDone} icon={<Ionicons name="arrow-forward" size={18} color={colors.textOnPrimary} />} />
+          <>
+            <Button title="Continue" onPress={onDone} icon={<Ionicons name="arrow-forward" size={18} color={colors.textOnPrimary} />} />
+            {onPractice && (
+              <Button
+                title="Practise this topic with AI"
+                variant="secondary"
+                size="sm"
+                onPress={onPractice}
+                icon={<Ionicons name="sparkles" size={16} color={colors.text} />}
+              />
+            )}
+          </>
         ) : (
           <>
             <Button title="Try again" onPress={onRetry} icon={<Ionicons name="refresh" size={18} color={colors.textOnPrimary} />} />

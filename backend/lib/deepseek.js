@@ -14,7 +14,11 @@ import { ServiceUnavailableError, UpstreamError } from "../utils/index.js";
 /**
  * @param {ChatMessage[]} messages
  * @param {{ model?: string, temperature?: number, maxTokens?: number, timeoutMs?: number,
- *           fetchImpl?: typeof fetch, apiKey?: string, baseUrl?: string }} [options]
+ *           fetchImpl?: typeof fetch, apiKey?: string, baseUrl?: string,
+ *           jsonMode?: boolean }} [options]
+ *   `jsonMode` sets DeepSeek's `response_format: { type: "json_object" }`, which constrains the
+ *   model to emit a single valid JSON object. The prompt must still mention JSON (provider
+ *   requirement) — callers are responsible for that and for validating the parsed result.
  * @returns {Promise<ChatResult>}
  */
 export async function createChatCompletion(messages, options = {}) {
@@ -26,6 +30,7 @@ export async function createChatCompletion(messages, options = {}) {
     fetchImpl = fetch,
     apiKey = config.deepseek.apiKey,
     baseUrl = config.deepseek.baseUrl,
+    jsonMode = false,
   } = options;
 
   if (!apiKey) throw new ServiceUnavailableError("AI assistant is not configured (DEEPSEEK_API_KEY missing)");
@@ -35,7 +40,14 @@ export async function createChatCompletion(messages, options = {}) {
     response = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: false }),
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+        stream: false,
+        ...(jsonMode && { response_format: { type: "json_object" } }),
+      }),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {

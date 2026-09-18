@@ -2,62 +2,77 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { AppText, Button, PressableScale, SegmentedControl, Sheet, TextField } from '@/components/ui';
+import type { CategoryId, TransactionType } from '@/api/types';
+import { AppText, Button, FormError, PressableScale, SegmentedControl, Sheet, TextField } from '@/components/ui';
+import { getErrorMessage } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
 import { colors, fonts, radius, spacing } from '@/theme';
-import { categories, type CategoryId, type Transaction } from './sampleData';
+import { categoryOptions, defaultCategory } from './categories';
+import { useCreateTransaction } from './useFinance';
 
-type Kind = 'expense' | 'income';
 const KINDS = [
   { label: 'Expense', value: 'expense' },
   { label: 'Income', value: 'income' },
 ] as const;
 
-type Props = { visible: boolean; onClose: () => void; onSave: (tx: Transaction) => void; currency: string };
+type Props = { visible: boolean; onClose: () => void; currency: string; onSaved?: () => void };
 
-/** Quick-add sheet. Local-only for now — swap onSave for a POST /finance/transactions mutation. */
-export function AddTransactionSheet({ visible, onClose, onSave, currency }: Props) {
-  const [kind, setKind] = useState<Kind>('expense');
+/** Manual quick-add. Writes straight to /finance/transactions. */
+export function AddTransactionSheet({ visible, onClose, currency, onSaved }: Props) {
+  const create = useCreateTransaction();
+  const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<CategoryId>('food');
+  const [error, setError] = useState<string | null>(null);
 
-  const options = Object.values(categories).filter((c) => c.kind === kind);
   const value = Number.parseFloat(amount.replace(/,/g, ''));
   const valid = Number.isFinite(value) && value > 0;
 
   const reset = () => {
     setAmount('');
     setTitle('');
-    setKind('expense');
+    setType('expense');
     setCategory('food');
+    setError(null);
   };
 
-  const save = () => {
-    if (!valid) return;
-    const minor = Math.round(value * 100) * (kind === 'expense' ? -1 : 1);
-    onSave({
-      id: `local-${Date.now()}`,
-      title: title.trim() || categories[category].label,
-      category,
-      amount: minor,
-      date: new Date().toISOString(),
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  const close = () => {
     reset();
     onClose();
   };
 
+  const save = async () => {
+    if (!valid) return;
+    setError(null);
+    try {
+      await create.mutateAsync({
+        type,
+        // Minor units, rounded once here — see root AGENTS.md → Money.
+        amount: Math.round(value * 100),
+        category,
+        title: title.trim(),
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      reset();
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
+
   return (
-    <Sheet visible={visible} onClose={onClose} title="Add transaction">
+    <Sheet visible={visible} onClose={close} title="Add transaction" scroll>
       <SegmentedControl
         options={KINDS}
-        value={kind}
-        onChange={(k) => {
-          setKind(k);
-          setCategory(k === 'expense' ? 'food' : 'salary');
+        value={type}
+        onChange={(next) => {
+          setType(next);
+          setCategory(defaultCategory(next));
         }}
       />
+
       <View style={styles.amountRow}>
         <AppText style={styles.symbol} color={colors.textMuted}>
           {currencySymbol(currency).trim()}
@@ -73,9 +88,11 @@ export function AddTransactionSheet({ visible, onClose, onSave, currency }: Prop
           accessibilityLabel="Amount"
         />
       </View>
+
       <TextField label="Note" icon="create-outline" value={title} onChangeText={setTitle} placeholder="e.g. Lunch with team" />
+
       <View style={styles.chips}>
-        {options.map((c) => {
+        {categoryOptions(type).map((c) => {
           const active = c.id === category;
           return (
             <PressableScale
@@ -93,7 +110,15 @@ export function AddTransactionSheet({ visible, onClose, onSave, currency }: Prop
           );
         })}
       </View>
-      <Button title={kind === 'expense' ? 'Add expense' : 'Add income'} disabled={!valid} onPress={save} />
+
+      <FormError message={error} />
+
+      <Button
+        title={type === 'expense' ? 'Add expense' : 'Add income'}
+        disabled={!valid}
+        loading={create.isPending}
+        onPress={save}
+      />
     </Sheet>
   );
 }

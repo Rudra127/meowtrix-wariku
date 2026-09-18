@@ -2,10 +2,13 @@
 // Business logic for users. Throws AppErrors; returns plain data.
 import { clerkClient } from "@clerk/express";
 import { GOALS, LEVELS } from "../database/models/user.js";
+import FinanceRepository from "../database/repository/finance-repository.js";
+import IntegrationRepository from "../database/repository/integration-repository.js";
 import UserRepository, {
   fieldsFromClerkUser,
   fieldsFromClerkWebhook,
 } from "../database/repository/user-repository.js";
+import { isTimeZone } from "../utils/dates.js";
 import { NotFoundError, ValidationError } from "../utils/index.js";
 
 // Fields a user may change on their own profile via PATCH /users/me.
@@ -17,11 +20,21 @@ const SELF_EDITABLE = {
   currency: isCurrency,
   level: (v) => LEVELS.includes(v),
   goal: (v) => GOALS.includes(v),
+  timezone: isTimeZone,
 };
 
 export default class UserService {
-  constructor(repository = new UserRepository()) {
+  /**
+   * The extra repositories exist only for the account-deletion cascade (`#purgeUserData`).
+   * They're constructor arguments so tests can assert the cascade ran without a database.
+   */
+  constructor(
+    repository = new UserRepository(),
+    { financeRepository = new FinanceRepository(), integrationRepository = new IntegrationRepository() } = {}
+  ) {
     this.repository = repository;
+    this.financeRepository = financeRepository;
+    this.integrationRepository = integrationRepository;
   }
 
   /**
@@ -66,17 +79,20 @@ export default class UserService {
    * Body: { level, goal, currency? } — level/goal drive personalisation across the app.
    */
   async completeOnboarding(clerkId, body = {}) {
-    const { level, goal, currency } = body;
+    const { level, goal, currency, timezone } = body;
     const invalid = {};
     if (!LEVELS.includes(level)) invalid.level = `Must be one of: ${LEVELS.join(", ")}`;
     if (!GOALS.includes(goal)) invalid.goal = `Must be one of: ${GOALS.join(", ")}`;
     if (currency !== undefined && !isCurrency(currency)) invalid.currency = "Must be a 3-letter ISO code";
+    // The app sends its device timezone here; ignore it silently if the device reports nonsense
+    // rather than failing onboarding over it.
     if (Object.keys(invalid).length) throw new ValidationError("Invalid onboarding answers", invalid);
 
     const user = await this.repository.updateByClerkId(clerkId, {
       level,
       goal,
       ...(currency && { currency: currency.toUpperCase() }),
+      ...(isTimeZone(timezone) && { timezone }),
       isOnboarded: true,
       onboardedAt: new Date(),
     });
@@ -84,11 +100,35 @@ export default class UserService {
     return user;
   }
 
-  /** Deletes the account everywhere: Clerk (identity + sessions) and our DB (app data). */
+  /**
+   * Deletes the account everywhere: Clerk (identity + sessions) and our DB (all app data).
+   *
+   * Order matters. Clerk goes first so the user's sessions are revoked immediately — if our own
+   * cleanup then fails halfway, they cannot keep using a half-deleted account. `#purgeUserData`
+   * runs before the User row so a crash leaves orphaned children discoverable by userId rather
+   * than silently unreachable.
+   */
   async deleteMe(clerkId) {
+    const user = await this.repository.findByClerkId(clerkId);
     await clerkClient.users.deleteUser(clerkId);
+    if (user) await this.#purgeUserData(user._id);
     await this.repository.deleteByClerkId(clerkId);
-    // TODO(feature teams): also delete documents in your collections that reference this user.
+  }
+
+  /**
+   * Removes every document that hangs off a user.
+   *
+   * ADDING A FEATURE WITH USER-OWNED DATA? Add its repository here, or deleting an account will
+   * leave that data behind — which breaks both the App Store / Play Store deletion requirement and
+   * any "right to erasure" promise.
+   */
+  async #purgeUserData(userId) {
+    await Promise.all([
+      // Accounts, transactions, budgets, goals.
+      this.financeRepository.deleteAllForUser(userId),
+      // Broker links — these hold encrypted access tokens, so leaving them is a real risk.
+      this.integrationRepository.deleteAllForUser(userId),
+    ]);
   }
 
   async list(query) {
@@ -104,7 +144,14 @@ export default class UserService {
     return this.repository.upsertFromClerk(data.id, fieldsFromClerkWebhook(data));
   }
 
+  /**
+   * A user was deleted in the Clerk Dashboard (or by another client). Mirror it: same cascade as
+   * `deleteMe`, minus the Clerk call that already happened.
+   */
   async handleClerkUserDeleted(data) {
-    if (data?.id) await this.repository.deleteByClerkId(data.id);
+    if (!data?.id) return;
+    const user = await this.repository.findByClerkId(data.id);
+    if (user) await this.#purgeUserData(user._id);
+    await this.repository.deleteByClerkId(data.id);
   }
 }

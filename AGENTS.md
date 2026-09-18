@@ -11,14 +11,36 @@ A mobile app that makes people better with money. Three main tabs:
 | Tab | Route | What it is | Status |
 |---|---|---|---|
 | **Learn** | `mobile/app/(tabs)/index.tsx` | Duolingo-style finance lessons: units → lessons → quizzes, XP, streaks | UI done, sample data |
-| **Money** | `mobile/app/(tabs)/money.tsx` | Personal finance management: transactions, budgets, goals | UI done, sample data |
-| **Ask AI** | `mobile/app/(tabs)/ask.tsx` | Finance chatbot on **DeepSeek**, answers questions about the user's own finances | Working chat (DeepSeek) |
-| Profile | `mobile/app/(tabs)/profile.tsx` | Account, backend-connection status, sign out, delete account | Done |
+| **Money** | `mobile/app/(tabs)/money.tsx` | Personal finance: **voice-first** entry, budgets, goals, monthly dashboard | **Done (live data)** |
+| **Ask AI** | `mobile/app/(tabs)/ask.tsx` | Finance assistant on **DeepSeek** with **tool calling** — answers from the user's real finances + Zerodha holdings | **Done (grounded)** |
+| Profile | `mobile/app/(tabs)/profile.tsx` | Account, connected accounts (Zerodha), backend status, sign out, delete account | Done |
 
 First run: a 2-question onboarding (experience level + main goal) personalises every tab and the AI's tone.
 
-**What's done:** the skeleton. Clerk auth end-to-end (mobile ↔ backend), user sync into MongoDB, a typed
-API client, a DeepSeek client, a design system, and tab UIs (Learn/Money on sample data). **What's next:** the features — see `docs/ROADMAP.md`.
+**What's done:** the skeleton (Clerk auth end-to-end, user sync into MongoDB, typed API client, DeepSeek
+client, design system) plus the **Money** and **Ask AI** features.
+- **Money** — add income/expenses by **voice**: the user speaks, the backend transcribes (`/finance/voice`)
+  and an LLM extracts transactions, then the user confirms before anything is saved. Manual quick-add,
+  budgets, savings goals and a timezone-correct monthly dashboard are all live on `/api/v1/finance/*`.
+- **Ask AI** — a grounded agent: it calls tools (`backend/services/ai-tools.js`) to read the user's own
+  transactions/budgets/goals and, when a broker is connected (**Upstox** or **Zerodha**), their portfolio
+  holdings, and answers at the experience level from onboarding. It never states a figure it didn't fetch
+  from a tool.
+
+**What's next:** the Learn feature — see `docs/ROADMAP.md`.
+
+### Owner setup still required
+Both features degrade gracefully without these; see each app's `.env.example`.
+- `STT_API_KEY` (`backend/.env.dev`) — turns on the microphone. Without it, typed natural-language entry
+  still works. Groq has a free tier; OpenAI works too.
+- A **brokerage** (Profile → Connected accounts) so Ask AI can read holdings. Two providers are supported;
+  connect either:
+  - **Upstox** (recommended — **free**): `UPSTOX_API_KEY` / `UPSTOX_API_SECRET` / `UPSTOX_REDIRECT_URL` +
+    `ENCRYPTION_KEY`. Free developer app at https://account.upstox.com/developer/apps.
+  - **Zerodha**: `ZERODHA_API_KEY` / `ZERODHA_API_SECRET` / `ZERODHA_REDIRECT_URL` + `ENCRYPTION_KEY`. Kite
+    Connect requires a **paid** developer app.
+  Without any of these the cards show "not available". Each redirect URL must exactly match the one
+  registered on that broker's app (and in dev be your LAN IP, not `localhost`).
 
 ## Repo map
 
@@ -54,6 +76,10 @@ wariku/
 3. On a user's first authenticated request, `protect` **creates their Mongo `User`** (lazy sync). The
    optional Clerk webhook keeps name/email/role in sync afterwards and handles deletions.
 4. App data (lessons progress, transactions, chats…) lives in MongoDB, keyed by `User._id`.
+5. **Ask AI is an agent, not a passthrough.** `ai-service` runs a tool-calling loop: DeepSeek may call tools
+   (`ai-tools.js`) that read the user's finance data and Zerodha holdings, then answers from the results.
+6. **Third-party tokens** (Zerodha access tokens) are encrypted at rest with `ENCRYPTION_KEY` (`lib/crypto.js`)
+   and only ever read server-side; the app never receives them.
 
 ## Run it locally
 
@@ -64,6 +90,7 @@ application (see `docs/AUTH.md`), optionally a DeepSeek API key.
 # 1. Backend  → http://localhost:5947
 cd backend && npm install
 cp .env.example .env.dev          # fill in MONGODB_URI, CLERK_*, DEEPSEEK_API_KEY
+                                  # optional: STT_API_KEY (voice), ZERODHA_* + ENCRYPTION_KEY (holdings)
 npm run dev
 curl localhost:5947/health
 
@@ -102,7 +129,14 @@ the same Wi-Fi work without extra config. Profile tab → "Backend connection" s
   `EXPO_PUBLIC_*` values — those ship inside the app bundle, so they must never be secrets. The DeepSeek key
   therefore stays on the backend; the app always calls DeepSeek through `/api/v1/ai/*`.
 - **Money:** store amounts as **integers in minor units** (paise/cents) plus an ISO-4217 `currency`.
-  Never floats. Format for display only in the UI.
+  Never floats. Format for display only in the UI. A `Transaction.amount` is always **positive**; its
+  `type` (`income`/`expense`) carries the direction — derive the display sign, don't store it. (One
+  documented exception: Zerodha holdings are pass-through rupee floats, never stored in the ledger.)
+- **Timezone:** which calendar month a transaction belongs to depends on the **user's** timezone
+  (`User.timezone`), not UTC. Month maths lives in `backend/utils/dates.js`; the mobile onboarding sends the
+  device zone.
+- **AI grounding:** the assistant must never invent a figure about the user — every number comes from a
+  tool result. New AI capabilities are tools in `backend/services/ai-tools.js`, bound to one user.
 - **Keep layers:** backend `api/` (HTTP) → `services/` (logic) → `database/repository/` (queries).
   Mobile `app/` (routes, thin) → `src/features/<feature>/` (screens, hooks) → `src/api/` (HTTP).
 - **Tests:** new backend endpoints get tests in `backend/tests/`. Keep tests offline (inject fakes, see

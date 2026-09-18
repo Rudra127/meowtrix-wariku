@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatMessage } from '@/api/types';
 import { AppText, Button, IconButton, PressableScale, Screen, type IconName } from '@/components/ui';
+import { useBrokerages } from '@/features/finance/useFinance';
+import { DATA_SUGGESTIONS, HOLDINGS_SUGGESTION } from '@/features/onboarding/options';
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { getErrorMessage } from '@/lib/errors';
@@ -12,11 +14,25 @@ import { colors, fonts, radius, shadow, spacing } from '@/theme';
 import { AiOrb } from './AiOrb';
 import { MessageContent } from './MessageContent';
 import { TypingDots } from './TypingDots';
-import { useChat } from './useChat';
+import { describeTools, useChat } from './useChat';
 
 export function ChatScreen() {
-  const { messages, send, retry, reset, isSending, error } = useChat();
+  const { messages, send, retry, reset, toolsUsed, isSending, error } = useChat();
+  const groundedIn = describeTools(toolsUsed);
   const { plan, level } = usePersonalization();
+  const brokerages = useBrokerages();
+  const holdingsConnected = brokerages.data?.some((b) => b.connected) ?? false;
+
+  // Lead with prompts that use the user's real data — that capability is invisible otherwise —
+  // then fall back to the education prompts for their onboarding goal.
+  const suggestions = useMemo(
+    () => [
+      ...DATA_SUGGESTIONS,
+      ...(holdingsConnected ? [HOLDINGS_SUGGESTION] : []),
+      ...plan.aiSuggestions,
+    ].slice(0, 4),
+    [plan.aiSuggestions, holdingsConnected],
+  );
   const [input, setInput] = useState('');
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const insets = useSafeAreaInsets();
@@ -66,9 +82,18 @@ export function ChatScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => <Bubble message={item} />}
-        ListEmptyComponent={<EmptyState onPick={onSend} suggestions={plan.aiSuggestions} />}
+        ListEmptyComponent={<EmptyState onPick={onSend} suggestions={suggestions} />}
         ListFooterComponent={
           <>
+            {/* Makes it visible when an answer came from the user's own data rather than the model. */}
+            {!!groundedIn && !isSending && (
+              <View style={styles.grounded}>
+                <Ionicons name="shield-checkmark-outline" size={12} color={colors.textSubtle} />
+                <AppText variant="caption" color={colors.textSubtle} style={styles.groundedText}>
+                  {groundedIn}
+                </AppText>
+              </View>
+            )}
             {isSending && (
               <View style={styles.assistantRow}>
                 <AiOrb size={28} />
@@ -227,6 +252,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
   },
+  grounded: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 36, marginTop: -spacing.sm },
+  groundedText: { fontSize: 11 },
   composerWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   composer: {
     flexDirection: 'row',

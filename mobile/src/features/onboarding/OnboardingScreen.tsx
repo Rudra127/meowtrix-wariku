@@ -22,6 +22,15 @@ import { OptionCard } from './OptionCard';
 
 type Step = 0 | 1 | 2 | 3; // welcome, level, goal, plan
 
+/** The device's IANA zone, or undefined if the platform won't say (the backend then keeps its default). */
+const deviceTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export function OnboardingScreen() {
   const api = useApi();
   const queryClient = useQueryClient();
@@ -38,7 +47,10 @@ export function OnboardingScreen() {
   }, [step, enter]);
 
   const finish = useMutation({
-    mutationFn: (answers: { level: Level; goal: Goal }) => usersApi.completeOnboarding(api, answers),
+    // The device timezone rides along silently: the backend needs it to decide which calendar month
+    // a transaction belongs to (a 00:30 IST purchase is the previous day in UTC).
+    mutationFn: (answers: { level: Level; goal: Goal }) =>
+      usersApi.completeOnboarding(api, { ...answers, timezone: deviceTimezone() }),
     onSuccess: ({ user }) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       // Updating the cached user flips the root guard from (onboarding) to (tabs).

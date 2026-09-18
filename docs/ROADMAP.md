@@ -3,7 +3,7 @@
 Starting points for each tab. Data models and endpoints below are **suggestions** that follow the repo
 conventions (see root `AGENTS.md`) — refine them as you build, and update this file when you do.
 
-Build order suggestion: Learn MVP → Money MVP → ground Ask AI in Money data.
+**Status:** Money ✅ and Ask AI ✅ are built (see each section). Learn is next — still a spec.
 
 ---
 
@@ -41,7 +41,22 @@ exercise at a time, progress bar), ResultScreen (XP + streak animation).
 
 ---
 
-## 2. Money — personal finance management
+## 2. Money — personal finance management ✅ BUILT
+
+> **Built and live** on `/api/v1/finance/*` (see `backend/AGENTS.md` for the full endpoint table) with the
+> Money tab wired to it (`mobile/src/features/finance/`). What actually shipped differs from the original
+> suggestion below in a few deliberate ways:
+> - **Voice-first entry** is the headline: the user speaks, the backend transcribes (`/finance/voice`) and an
+>   LLM extracts transactions in JSON mode, and the user **confirms drafts** before anything is saved.
+>   `/finance/parse` is the typed equivalent. This was the owner's core ask — automatic capture from voice/AI
+>   rather than form-filling.
+> - `Transaction.amount` is stored **positive** with a separate `type` (not signed).
+> - A denormalised `month` field + `User.timezone` make monthly rollups timezone-correct (`utils/dates.js`).
+> - `GET /finance/summary` returns the whole dashboard (balance, totals, per-category, budgets, goals,
+>   month-on-month change) in one request; `GET /finance/series` powers the chart.
+> - Categories are a fixed, shared list (`backend/database/models/categories.js` ↔
+>   `mobile/src/features/finance/categories.ts`) so voice extraction, storage and icons all agree.
+> The original spec is kept below for context.
 
 **Goal:** see where money goes, set budgets, save toward goals. Manual entry first.
 
@@ -74,26 +89,40 @@ Budgets, Goals.
 
 ---
 
-## 3. Ask AI — finance assistant (DeepSeek)
+## 3. Ask AI — finance assistant (DeepSeek) ✅ BUILT (grounded, tool-calling)
 
 **Today:** `POST /api/v1/ai/chat` — stateless, non-streaming; the app keeps the conversation in memory
-(`src/features/chat/useChat.ts`). System prompt in `backend/services/ai-service.js` (general education, not
-regulated advice). Per-user rate limit 20 req/min.
+(`src/features/chat/useChat.ts`). It is now an **agent loop** (`backend/services/ai-service.js`): DeepSeek can
+call tools (`backend/services/ai-tools.js`) to read the user's real data before answering. Response includes
+`toolsUsed`, which the app surfaces as a "Checked your spending" hint so grounding is visible.
 
-**Next steps, in order**
+**Tools available** (each bound to one user; amounts cross the boundary in rupees):
+`get_month_summary`, `list_transactions`, `get_spending_trend`, `get_budgets`, `get_goals`, `get_accounts`,
+`record_transaction` (the only writer — logs an expense/income the user asks it to), and — only when a
+brokerage is linked — `get_zerodha_holdings`, `get_zerodha_positions`.
+
+**Answers adapt to the user's level** (beginner / intermediate / advanced from onboarding): the system prompt
+bans jargon for beginners and goes precise/quantitative for advanced users. The load-bearing rule is
+"**never invent a number**" — every figure comes from a tool result.
+
+**Brokerage holdings** (Upstox — free — or Zerodha) are reachable only through the AI tools (no holdings
+screen), matching the owner's ask. The integration layer is provider-generic: a broker is a `lib/<broker>.js`
+client implementing a uniform interface plus one line in `services/brokerages.js`. The connect flow lives in
+Profile → Connected accounts; tokens are encrypted at rest and expire daily, surfaced as a "Reconnect" state.
+
+**Still next, in order**
 1. **Persist conversations:** `Conversation { userId, title, createdAt }`,
    `Message { conversationId, userId, role, content, tokens }`. Endpoints:
    `GET/POST /api/v1/ai/conversations`, `GET /api/v1/ai/conversations/:id/messages`,
    `POST /api/v1/ai/conversations/:id/messages` (server loads history — clients stop sending it).
-2. **Streaming:** DeepSeek supports `stream: true` (SSE). Stream from backend to app; on React Native use
-   `expo/fetch` (supports streaming response bodies) and render tokens as they arrive.
-3. **Grounding in the user's finances** ("answer questions about their own finances"): before calling the
-   model, have the backend build a compact context — e.g. this month's summary, budgets, goals — from the
-   Money feature and add it as a system message. Prefer **server-side** context building over sending data
-   from the app. Later: tool/function calling (`get_transactions(from, to, category)`) so the model fetches
-   only what it needs.
-4. **Safety & cost:** keep the "education, not advice" framing; log token usage per user; add a daily quota;
-   consider `deepseek-reasoner` for complex planning questions (configurable via `DEEPSEEK_MODEL`).
+2. **Streaming:** DeepSeek supports `stream: true` (SSE). Trickier now that the reply may involve tool rounds;
+   stream only the final turn. On React Native use `expo/fetch`.
+3. **Safety & cost:** keep the "education, not advice" framing; log token usage per user (the response already
+   returns `usage`); add a daily quota; consider `deepseek-reasoner` for complex planning (`DEEPSEEK_MODEL`).
+4. **More brokers / accounts:** the integration layer (`services/brokerage-service.js` + `brokerages.js`,
+   `models/integration.js`) is provider-generic — Upstox and Zerodha already share it; add bank/mutual-fund
+   providers the same way (a `lib/<broker>.js` client + one registry line) and they surface via the same
+   `get_holdings` tool.
 5. **Tie-in with Learn:** "Explain this lesson differently", generated practice questions.
 
 ---

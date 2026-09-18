@@ -5,6 +5,17 @@ process.env.CLERK_PUBLISHABLE_KEY = `pk_test_${Buffer.from("example.clerk.accoun
 process.env.CLERK_SECRET_KEY = "sk_test_fake_secret_for_tests";
 process.env.CLERK_WEBHOOK_SIGNING_SECRET = `whsec_${Buffer.from("test-secret").toString("base64")}`;
 delete process.env.DEEPSEEK_API_KEY;
+delete process.env.STT_API_KEY;
+
+// Fake-but-structurally-valid third-party config, so the Zerodha and encryption paths are exercised
+// offline. Every outbound call is injected (`fetchImpl`) — nothing here reaches a real service.
+process.env.ENCRYPTION_KEY = "a".repeat(64); // 32 bytes, hex
+process.env.ZERODHA_API_KEY = "kite_test_key";
+process.env.ZERODHA_API_SECRET = "kite_test_secret";
+process.env.ZERODHA_REDIRECT_URL = "http://localhost:5947/api/v1/integrations/zerodha/callback";
+process.env.UPSTOX_API_KEY = "upstox_test_key";
+process.env.UPSTOX_API_SECRET = "upstox_test_secret";
+process.env.UPSTOX_REDIRECT_URL = "http://localhost:5947/api/v1/integrations/upstox/callback";
 
 // Networkless token verification: Clerk verifies against this PEM instead of fetching JWKS.
 // `testSigningKey` signs tokens the backend accepts; anything else must be rejected.

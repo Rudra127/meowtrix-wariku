@@ -113,6 +113,22 @@ export const GOAL_OPTIONS: GoalPlan[] = [
   },
 ];
 
+/**
+ * Prompts that exercise the assistant's tools against the user's own data, rather than asking for
+ * general education. Shown first on the Ask AI tab so the "it knows my money" capability is
+ * discoverable — most people would never guess to ask.
+ */
+export const DATA_SUGGESTIONS: { icon: IconName; text: string }[] = [
+  { icon: 'stats-chart-outline', text: 'Where did my money go this month?' },
+  { icon: 'trending-down-outline', text: 'Am I spending more than last month?' },
+];
+
+/** Only shown once a brokerage account is linked. */
+export const HOLDINGS_SUGGESTION: { icon: IconName; text: string } = {
+  icon: 'briefcase-outline',
+  text: 'How is my portfolio doing?',
+};
+
 export const levelOption = (level: Level | null | undefined) =>
   LEVEL_OPTIONS.find((l) => l.value === level) ?? LEVEL_OPTIONS[0];
 

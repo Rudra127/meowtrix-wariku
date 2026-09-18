@@ -3,10 +3,17 @@ import { StyleSheet, View } from 'react-native';
 import { Amount, AppText, Badge, IconButton, PressableScale, type IconName } from '@/components/ui';
 import { colors, fonts, radius, spacing } from '@/theme';
 
-type Action = { key: string; label: string; icon: IconName; primary?: boolean };
+export type BalanceAction = 'voice' | 'add' | 'budgets' | 'goals';
+
+type Action = { key: BalanceAction; label: string; icon: IconName; primary?: boolean };
+
+/**
+ * Voice leads deliberately — it's the fastest way to log something and the reason the tab exists.
+ * Manual add stays one tap away for corrections and for when speaking isn't an option.
+ */
 const ACTIONS: Action[] = [
-  { key: 'add', label: 'Add', icon: 'add', primary: true },
-  { key: 'transfer', label: 'Transfer', icon: 'swap-horizontal' },
+  { key: 'voice', label: 'Speak', icon: 'mic', primary: true },
+  { key: 'add', label: 'Add', icon: 'add' },
   { key: 'budgets', label: 'Budgets', icon: 'pie-chart-outline' },
   { key: 'goals', label: 'Goals', icon: 'flag-outline' },
 ];
@@ -17,10 +24,14 @@ type Props = {
   hidden: boolean;
   changePct: number;
   onToggleHidden: () => void;
-  onAction: (key: string) => void;
+  onAction: (key: BalanceAction) => void;
 };
 
 export function BalanceCard({ balance, currency, hidden, changePct, onToggleHidden, onAction }: Props) {
+  // Spending *less* than last month is good news, so the arrow follows the direction of travel
+  // while the tone stays neutral — this is a factual comparison, not a score.
+  const spendingUp = changePct > 0;
+
   return (
     <View style={styles.card}>
       <View style={[styles.ring, { width: 260, height: 260, right: -90, top: -110 }]} />
@@ -38,16 +49,35 @@ export function BalanceCard({ balance, currency, hidden, changePct, onToggleHidd
           accessibilityLabel={hidden ? 'Show balance' : 'Hide balance'}
         />
       </View>
-      <Amount minor={balance} currency={currency} size={38} color={colors.textOnPrimary} fractionColor={colors.textOnPrimaryMuted} hidden={hidden} />
-      <Badge
-        tone="accent"
-        icon={changePct >= 0 ? 'trending-up' : 'trending-down'}
-        label={`${changePct >= 0 ? '+' : ''}${changePct}% vs last month`}
+
+      <Amount
+        minor={balance}
+        currency={currency}
+        size={38}
+        color={colors.textOnPrimary}
+        fractionColor={colors.textOnPrimaryMuted}
+        hidden={hidden}
       />
+
+      {changePct === 0 ? (
+        <Badge tone="glass" icon="remove-outline" label="Same spending as last month" />
+      ) : (
+        <Badge
+          tone="accent"
+          icon={spendingUp ? 'trending-up' : 'trending-down'}
+          label={`${spendingUp ? '+' : ''}${changePct}% spending vs last month`}
+        />
+      )}
 
       <View style={styles.actions}>
         {ACTIONS.map((a) => (
-          <PressableScale key={a.key} onPress={() => onAction(a.key)} style={styles.action} accessibilityRole="button" accessibilityLabel={a.label}>
+          <PressableScale
+            key={a.key}
+            onPress={() => onAction(a.key)}
+            style={styles.action}
+            accessibilityRole="button"
+            accessibilityLabel={a.label}
+          >
             <View style={[styles.actionIcon, a.primary && styles.actionPrimary]}>
               <Ionicons name={a.icon} size={22} color={a.primary ? colors.primary : colors.textOnPrimary} />
             </View>

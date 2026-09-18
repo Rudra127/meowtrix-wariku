@@ -11,6 +11,8 @@ import { useApi } from '@/api/useApi';
 import { AppText, Avatar, Badge, Button, Card, FormError, PressableScale, Screen, SectionHeader, Sheet } from '@/components/ui';
 import { API_URL } from '@/config/env';
 import { learnerStats } from '@/features/learn/sampleData';
+import { useBrokerages } from '@/features/finance/useFinance';
+import { BrokerageCard } from '@/features/integrations/BrokerageCard';
 import { GOAL_OPTIONS, LEVEL_OPTIONS } from '@/features/onboarding/options';
 import { OptionCard } from '@/features/onboarding/OptionCard';
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
@@ -35,10 +37,13 @@ export function ProfileScreen() {
   const api = useApi();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  /** Transient confirmation from the Zerodha connect flow ("Zerodha connected."). */
+  const [notice, setNotice] = useState<string | null>(null);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [notifications, setNotifications] = useState(true); // placeholder until push is wired
   const [editing, setEditing] = useState<'level' | 'goal' | null>(null);
   const { level, plan } = usePersonalization();
+  const brokerages = useBrokerages();
 
   const updatePlan = useMutation({
     mutationFn: (updates: { level?: Level; goal?: Goal }) => usersApi.updateMe(api, updates),
@@ -111,6 +116,14 @@ export function ProfileScreen() {
 
       <FormError message={error} />
 
+      {!!notice && (
+        <Badge
+          tone={notice.toLowerCase().includes("couldn't") || notice.toLowerCase().includes('cancelled') ? 'warning' : 'success'}
+          icon="information-circle"
+          label={notice}
+        />
+      )}
+
       <SectionHeader title="Your plan" />
       <Card elevated style={styles.list}>
         <SettingsRow icon={plan.icon} label="Main goal" value={plan.label} onPress={() => setEditing('goal')} />
@@ -133,6 +146,12 @@ export function ProfileScreen() {
           }
         />
       </Card>
+
+      <SectionHeader title="Connected accounts" />
+      {/* Holdings are read only by the Ask AI tab — there's deliberately no portfolio screen. */}
+      {brokerages.data?.map((status) => (
+        <BrokerageCard key={status.provider} status={status} onMessage={setNotice} />
+      ))}
 
       <SectionHeader title="Account" />
       <Card elevated style={styles.list}>

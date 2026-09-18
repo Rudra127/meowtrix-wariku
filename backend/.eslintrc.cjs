@@ -1,12 +1,14 @@
 module.exports = {
     env: {
         browser: true,
-        es2021: true,
+        es2022: true,
         node: true, // Enable Node.js environment
     },
     extends: 'eslint:recommended',
     parserOptions: {
-        ecmaVersion: 12,
+        // 2022+ is required for private class members (`#method()`), which the services use to keep
+        // their internals genuinely private. ecmaVersion 12 (ES2021) fails to parse them.
+        ecmaVersion: 2022,
         sourceType: 'module',
     },
     rules: {
@@ -16,5 +18,5 @@ module.exports = {
     globals: {
         process: 'readonly', // Declare process as a global variable
     },
-    
+
 };

@@ -8,6 +8,8 @@ import morgan from "morgan";
 
 import ai from "./api/ai.js";
 import auth from "./api/auth.js";
+import finance from "./api/finance.js";
+import integrations from "./api/integrations.js";
 import user from "./api/user.js";
 import webhooks from "./api/webhooks.js";
 import { config } from "./config/index.js";
@@ -67,6 +69,8 @@ const expressApp = async (app) => {
   // Feature routes — add new modules here (see backend/AGENTS.md → "Adding a feature").
   auth(app);
   user(app);
+  finance(app);
+  integrations(app);
   ai(app);
 
   app.use((req) => {

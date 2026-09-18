@@ -157,6 +157,50 @@ describe("buildSystemPrompt personalisation", () => {
   });
 });
 
+describe("buildSystemPrompt voice rules", () => {
+  const levels = [undefined, "beginner", "intermediate", "advanced"];
+
+  it("bans em dashes, and practises what it preaches", () => {
+    for (const level of levels) {
+      const prompt = buildSystemPrompt({ ...user, level });
+      assert.match(prompt, /Never use:/);
+      assert.match(prompt, /Em dashes/);
+      // The prompt must not contain the characters it forbids: models copy the register of
+      // their system prompt, so a prompt full of em dashes teaches the model to use them.
+      assert.doesNotMatch(prompt, /[—–]/, `em/en dash leaked into the ${level ?? "no-level"} prompt`);
+    }
+  });
+
+  it("names the slop words it wants avoided", () => {
+    const prompt = buildSystemPrompt(user);
+    for (const word of ["crucial", "delve", "leverage", "utilize", "testament", "seamless"]) {
+      assert.match(prompt, new RegExp(word), `${word} should be on the banned list`);
+    }
+  });
+
+  it("bans the stock openers and closers", () => {
+    const prompt = buildSystemPrompt(user);
+    assert.match(prompt, /Great question/);
+    assert.match(prompt, /I hope this helps/);
+    assert.match(prompt, /Not just X, but Y/);
+  });
+
+  it("asks for the answer first and for active voice", () => {
+    const prompt = buildSystemPrompt(user);
+    assert.match(prompt, /Answer first/);
+    assert.match(prompt, /Active voice/);
+  });
+
+  it("keeps the voice rules on every level without leaking level-specific wording", () => {
+    // The shared voice block must not carry beginner-only or advanced-only vocabulary, or the
+    // level assertions above would pass for the wrong reasons.
+    const intermediate = buildSystemPrompt({ ...user, level: "intermediate" });
+    assert.match(intermediate, /VOICE/);
+    assert.doesNotMatch(intermediate, /No jargon/);
+    assert.doesNotMatch(intermediate, /quantitative/);
+  });
+});
+
 describe("buildToolSchemas", () => {
   it("hides the broker tools when no account is linked", () => {
     const names = buildToolSchemas({ brokerLinked: false }).map((t) => t.function.name);

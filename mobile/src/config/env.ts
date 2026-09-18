@@ -28,3 +28,10 @@ function resolveApiUrl(): string {
 }
 
 export const API_URL = resolveApiUrl();
+
+/**
+ * Server root, without the `/api/v1` prefix. `GET /health` lives here (it is deliberately outside
+ * the versioned, authenticated API), which lets the client tell "the backend is down" apart from
+ * "this one request failed".
+ */
+export const API_ORIGIN = API_URL.replace(/\/api\/v\d+$/, '');

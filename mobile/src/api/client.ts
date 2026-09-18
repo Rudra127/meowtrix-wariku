@@ -8,7 +8,7 @@
  *
  * Inside React, use `useApi()` (src/api/useApi.ts) which wires in Clerk's `getToken`.
  */
-import { API_URL } from '@/config/env';
+import { API_ORIGIN, API_URL } from '@/config/env';
 import type { ApiEnvelope } from './types';
 
 export class ApiError extends Error {
@@ -49,13 +49,57 @@ async function send(path: string, token: string | null, { method = 'GET', body, 
       signal: controller.signal,
     });
   } catch (err) {
-    const timedOut = controller.signal.aborted;
-    throw new ApiError(
-      0,
-      timedOut ? 'TIMEOUT' : 'NETWORK_ERROR',
-      timedOut ? 'The server took too long to respond.' : `Can't reach the server (${API_URL}). Is the backend running?`,
-      err,
-    );
+    if (controller.signal.aborted) {
+      throw new ApiError(0, 'TIMEOUT', 'The server took too long to respond.', err);
+    }
+
+    // `fetch` rejecting does NOT prove the server is down. A multipart upload also lands here when
+    // the local file can't be read, which is why this used to blame the backend for a file problem.
+    // Ask /health before accusing anyone.
+    const reachable = await serverIsReachable();
+    const detail = err instanceof Error && err.message ? ` (${err.message})` : '';
+
+    // The underlying cause is the only thing that identifies a bad file URI, a TLS failure or a
+    // genuinely dead server. Surface it in Metro rather than leaving it buried in `details`.
+    if (__DEV__) {
+      console.warn(`[api] ${method} ${path} failed`, {
+        reachable,
+        isFormData,
+        apiUrl: API_URL,
+        cause: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      });
+    }
+
+    if (reachable && isFormData) {
+      throw new ApiError(
+        0,
+        'UPLOAD_FAILED',
+        `The server is reachable but the upload failed${detail}. The recording may not have saved correctly.`,
+        err,
+      );
+    }
+    if (reachable) {
+      throw new ApiError(0, 'REQUEST_FAILED', `That request failed${detail}. The server itself is reachable.`, err);
+    }
+    throw new ApiError(0, 'NETWORK_ERROR', `Can't reach the server (${API_URL}). Is the backend running?`, err);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Cheap liveness probe against `GET /health`. Unauthenticated and short-timeout, used only to make a
+ * failure message truthful. Never throws.
+ */
+async function serverIsReachable(timeoutMs = 4000): Promise<boolean> {
+  if (!API_ORIGIN) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_ORIGIN}/health`, { method: 'GET', signal: controller.signal });
+    return res.ok;
+  } catch {
+    return false;
   } finally {
     clearTimeout(timer);
   }
@@ -75,13 +119,15 @@ async function parse<T>(res: Response): Promise<T> {
 
 export function createApiClient(getToken?: TokenGetter) {
   async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const token = getToken ? await getToken() : null;
+    const isUpload = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    // An upload can't be replayed (the body is backed by a file), so it gets no second chance on a
+    // 401. Spend the extra round-trip on a fresh token up front instead of failing after the upload.
+    const token = getToken ? await getToken(isUpload ? { skipCache: true } : undefined) : null;
     let res = await send(path, token, options);
 
     // A cached session token can be a few seconds from expiry by the time it reaches the server.
     // Retry once with a freshly minted token before surfacing a 401.
-    // Not retried for uploads: a FormData body backed by a file stream can't be replayed reliably.
-    if (res.status === 401 && getToken && !(options.body instanceof FormData)) {
+    if (res.status === 401 && getToken && !isUpload) {
       const fresh = await getToken({ skipCache: true });
       if (fresh) res = await send(path, fresh, options);
     }

@@ -122,7 +122,7 @@ export function useVoiceCapture() {
       // Release the recording audio session so playback elsewhere isn't left in the wrong mode.
       setAudioModeAsync({ allowsRecording: false }).catch(() => {});
 
-      const uri = recorder.uri;
+      const uri = normaliseFileUri(recorder.uri);
       if (discard) {
         setStage('idle');
         return;
@@ -232,6 +232,19 @@ export function useVoiceCapture() {
     reset,
     clearError: () => setError(null),
   };
+}
+
+/**
+ * React Native's uploader needs a URI it can resolve. `recorder.uri` is normally a `file://` URL,
+ * but on Android it can come back as a bare absolute path, and handing that to FormData makes the
+ * request reject before it ever leaves the device — which used to surface as "is the backend
+ * running?". Add the scheme when it's missing and leave anything else (`content://`) alone.
+ */
+export function normaliseFileUri(uri: string | null | undefined): string | null {
+  const trimmed = uri?.trim();
+  if (!trimmed) return null;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `file://${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 }
 
 /** expo-audio reports metering in dBFS (about −160 → 0). Map it to a usable 0–1 range. */

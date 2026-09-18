@@ -1,0 +1,65 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+      - name: Install
+        working-directory: ./backend
+        run: npm install
+      - name: Lint
+        working-directory: ./backend
+        run: npm run lint
+      - name: Test
+        working-directory: ./backend
+        run: npm test
+
+  deploy:
+    name: Deploy Backend (Single VM)
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Cache backend node_modules
+        uses: actions/cache@v4
+        with:
+          path: backend/node_modules
+          key: backend-${{ runner.os }}-${{ hashFiles('backend/package.json') }}
+          restore-keys: |
+            backend-${{ runner.os }}-
+
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm install --force
+
+      # Unchanged from the original pipeline: `npm start` loads backend/.env.dev on the VM.
+      # Switch to `-- run prod` (loads .env.prod) once production env vars are in place.
+      - name: Restart Backend via PM2 (Port from .env)
+        working-directory: ./backend
+        run: |
+          pm2 delete backend 2>/dev/null || true
+          pm2 start npm --name "backend" -- start
+          pm2 save
+
+      - name: Display PM2 Status
+        run: pm2 list

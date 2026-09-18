@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Wariku",
+    "slug": "wariku",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wariku.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E8F7EE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.wariku.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      "@clerk/expo",
+      "expo-font"
+    ],
+    "scheme": "wariku"
+  }
+}

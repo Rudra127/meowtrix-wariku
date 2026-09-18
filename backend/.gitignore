@@ -1,0 +1,44 @@
+# Environment variables — never commit
+.env
+.env.*
+!.env.example
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build output
+dist/
+build/
+coverage/
+
+
+
+# Logs
+logs/
+*.log
+pids/
+*.pid
+*.seed
+
+# Temporary files
+tmp/
+temp/
+cache/
+*.tgz
+
+# IDE and Editor folders
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Misc
+*.lock
+package-lock.json
+yarn.lock

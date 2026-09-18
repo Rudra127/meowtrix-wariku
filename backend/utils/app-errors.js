@@ -9,6 +9,7 @@ export const STATUS_CODES = {
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
+  CONFLICT: 409,
   TOO_MANY_REQUESTS: 429,
   INTERNAL_ERROR: 500,
   BAD_GATEWAY: 502,
@@ -59,6 +60,17 @@ export class ForbiddenError extends AppError {
 export class NotFoundError extends AppError {
   constructor(message = "Resource not found") {
     super(message, STATUS_CODES.NOT_FOUND, "NOT_FOUND");
+  }
+}
+
+/**
+ * A linked third-party account needs the user to sign in again (e.g. Zerodha access tokens expire
+ * every morning). Distinct from 401: our own session is fine, the *broker's* isn't. Clients branch
+ * on the code to show a "Reconnect" button instead of signing the user out.
+ */
+export class ReauthRequiredError extends AppError {
+  constructor(message = "Reconnect your account to continue", details) {
+    super(message, STATUS_CODES.CONFLICT, "REAUTH_REQUIRED", details);
   }
 }
 

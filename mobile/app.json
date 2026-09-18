@@ -8,7 +8,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.wariku.app"
+      "bundleIdentifier": "com.wariku.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Wariku uses your microphone so you can add expenses by speaking instead of typing."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,10 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.wariku.app"
+      "package": "com.wariku.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -29,7 +35,14 @@
       "expo-secure-store",
       "expo-web-browser",
       "@clerk/expo",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Wariku uses your microphone so you can add expenses by speaking instead of typing."
+        }
+      ],
+      "expo-asset"
     ],
     "scheme": "wariku"
   }

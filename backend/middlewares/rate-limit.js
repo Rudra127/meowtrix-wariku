@@ -26,3 +26,17 @@ export const aiLimiter = rateLimit({
   keyGenerator: (req) => `ai:${req.user.clerkId}`,
   handler: limitHandler,
 });
+
+/**
+ * Per-user limit for voice capture. Tighter than `aiLimiter` because each request costs a
+ * speech-to-text call plus a completion, and a stuck record button could otherwise loop.
+ * Must run after `protect`.
+ */
+export const voiceLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 12,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req) => `voice:${req.user.clerkId}`,
+  handler: limitHandler,
+});

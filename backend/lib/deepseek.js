@@ -2,12 +2,20 @@
 // Minimal DeepSeek client. DeepSeek's API is OpenAI-compatible:
 //   POST {baseUrl}/chat/completions  — https://api-docs.deepseek.com/
 // Kept dependency-free (Node 20 fetch) so swapping providers only touches this file.
+//
+// Supports the three modes the app needs:
+//   1. plain completion               — the assistant's prose replies
+//   2. JSON mode (`responseFormat`)   — structured extraction (voice → transactions)
+//   3. tool calling (`tools`)         — the finance harness reads the user's real data
 import { config } from "../config/index.js";
 import { ServiceUnavailableError, UpstreamError } from "../utils/index.js";
 
 /**
- * @typedef {{ role: "system" | "user" | "assistant", content: string }} ChatMessage
- * @typedef {{ content: string, model: string, finishReason: string | null,
+ * @typedef {{ role: "system" | "user" | "assistant" | "tool", content: string | null,
+ *             tool_calls?: object[], tool_call_id?: string }} ChatMessage
+ * @typedef {{ id: string, name: string, arguments: string }} ToolCall
+ * @typedef {{ content: string, toolCalls: ToolCall[], message: object, model: string,
+ *             finishReason: string | null,
  *             usage: { promptTokens: number, completionTokens: number, totalTokens: number } | null }} ChatResult
  */
 
@@ -15,10 +23,13 @@ import { ServiceUnavailableError, UpstreamError } from "../utils/index.js";
  * @param {ChatMessage[]} messages
  * @param {{ model?: string, temperature?: number, maxTokens?: number, timeoutMs?: number,
  *           fetchImpl?: typeof fetch, apiKey?: string, baseUrl?: string,
+ *           tools?: object[], toolChoice?: string,
+ *           responseFormat?: { type: "json_object" | "text" },
  *           jsonMode?: boolean }} [options]
- *   `jsonMode` sets DeepSeek's `response_format: { type: "json_object" }`, which constrains the
- *   model to emit a single valid JSON object. The prompt must still mention JSON (provider
+ *   `jsonMode: true` is shorthand for `responseFormat: { type: "json_object" }`, which constrains
+ *   the model to emit a single valid JSON object. The prompt must still mention JSON (a provider
  *   requirement) — callers are responsible for that and for validating the parsed result.
+ *   An explicit `responseFormat` wins if both are passed.
  * @returns {Promise<ChatResult>}
  */
 export async function createChatCompletion(messages, options = {}) {
@@ -30,24 +41,34 @@ export async function createChatCompletion(messages, options = {}) {
     fetchImpl = fetch,
     apiKey = config.deepseek.apiKey,
     baseUrl = config.deepseek.baseUrl,
+    tools,
+    toolChoice,
+    responseFormat,
     jsonMode = false,
   } = options;
 
   if (!apiKey) throw new ServiceUnavailableError("AI assistant is not configured (DEEPSEEK_API_KEY missing)");
+
+  // `jsonMode` is a convenience alias used by the practice generator; an explicit
+  // `responseFormat` takes precedence.
+  const format = responseFormat ?? (jsonMode ? { type: "json_object" } : undefined);
+
+  const body = {
+    model,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+    stream: false,
+    ...(tools?.length && { tools, ...(toolChoice && { tool_choice: toolChoice }) }),
+    ...(format && { response_format: format }),
+  };
 
   let response;
   try {
     response = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        stream: false,
-        ...(jsonMode && { response_format: { type: "json_object" } }),
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
@@ -67,10 +88,24 @@ export async function createChatCompletion(messages, options = {}) {
 
   const json = await response.json();
   const choice = json?.choices?.[0];
-  if (typeof choice?.message?.content !== "string") throw new UpstreamError("AI provider returned no content");
+  const message = choice?.message;
+  const toolCalls = (message?.tool_calls ?? []).map((call) => ({
+    id: call.id,
+    name: call.function?.name,
+    arguments: call.function?.arguments ?? "{}",
+  }));
+
+  // When the model decides to call a tool, `content` is legitimately null — only demand text
+  // when nothing else came back.
+  if (typeof message?.content !== "string" && !toolCalls.length) {
+    throw new UpstreamError("AI provider returned no content");
+  }
 
   return {
-    content: choice.message.content,
+    content: typeof message.content === "string" ? message.content : "",
+    toolCalls,
+    /** The raw assistant message, to be appended verbatim when continuing a tool conversation. */
+    message,
     model: json.model ?? model,
     finishReason: choice.finish_reason ?? null,
     usage: json.usage

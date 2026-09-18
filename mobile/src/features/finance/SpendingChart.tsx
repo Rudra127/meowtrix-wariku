@@ -1,10 +1,11 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
-import { AppText, Amount, Card, SegmentedControl } from '@/components/ui';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, View } from 'react-native';
+import type { SeriesPeriod, SeriesPoint } from '@/api/types';
+import { Amount, AppText, Card, SegmentedControl } from '@/components/ui';
 import { formatCompact } from '@/lib/format';
 import { colors, fonts, radius, spacing } from '@/theme';
-import { spending, type Period } from './sampleData';
+import { useFinanceSeries } from './useFinance';
 
 const PERIODS = [
   { label: 'Week', value: 'week' },
@@ -14,28 +15,43 @@ const PERIODS = [
 
 const CHART_HEIGHT = 150;
 
-/** Spending bars with period switcher. Bars grow in on change; tap one to inspect it. */
-export function SpendingChart({ currency }: { currency: string }) {
-  const [period, setPeriod] = useState<Period>('week');
-  const data = spending[period];
-  const total = data.reduce((s, d) => s + d.value, 0);
+/** Spending bars from /finance/series, with a period switcher. Tap a bar to inspect it. */
+export function SpendingChart({ currency, month }: { currency: string; month?: string }) {
+  const [period, setPeriod] = useState<SeriesPeriod>('week');
+  const { data, isPending, isError } = useFinanceSeries(period, month);
+  const points = data?.points ?? [];
 
   return (
     <Card elevated style={styles.card}>
       <View style={styles.head}>
         <View>
           <AppText variant="label">Spending this {period}</AppText>
-          <Amount minor={total} currency={currency} size={26} />
+          <Amount minor={data?.total ?? 0} currency={currency} size={26} />
         </View>
+        {isPending && <ActivityIndicator color={colors.primary} />}
       </View>
+
       <SegmentedControl options={PERIODS} value={period} onChange={setPeriod} />
-      {/* key → remount so bars re-animate from zero when the period changes */}
-      <Bars key={period} data={data} currency={currency} />
+
+      {isError ? (
+        <AppText variant="caption" center color={colors.danger}>
+          Couldn&apos;t load your spending chart.
+        </AppText>
+      ) : points.length === 0 ? (
+        <View style={[styles.empty, { height: CHART_HEIGHT }]}>
+          <AppText variant="caption" center>
+            No spending recorded for this {period} yet.
+          </AppText>
+        </View>
+      ) : (
+        // key → remount so bars re-animate from zero when the period changes
+        <Bars key={period} data={points} currency={currency} />
+      )}
     </Card>
   );
 }
 
-function Bars({ data, currency }: { data: { label: string; value: number }[]; currency: string }) {
+function Bars({ data, currency }: { data: SeriesPoint[]; currency: string }) {
   const max = Math.max(...data.map((d) => d.value), 1);
   const peak = data.reduce((best, d, i) => (d.value > data[best].value ? i : best), 0);
   const [selected, setSelected] = useState(peak);
@@ -58,7 +74,7 @@ function Bars({ data, currency }: { data: { label: string; value: number }[]; cu
         const h = Math.max(6, (d.value / max) * CHART_HEIGHT);
         return (
           <Pressable
-            key={`${d.label}-${i}`}
+            key={d.key}
             style={styles.col}
             onPress={() => {
               Haptics.selectionAsync().catch(() => {});
@@ -101,6 +117,7 @@ function Bars({ data, currency }: { data: { label: string; value: number }[]; cu
 const styles = StyleSheet.create({
   card: { gap: spacing.lg, padding: spacing.xl },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  empty: { alignItems: 'center', justifyContent: 'center' },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   col: { flex: 1, alignItems: 'center', gap: spacing.xs },
   valueSlot: { height: 26, justifyContent: 'flex-end', alignItems: 'center', overflow: 'visible' },

@@ -1,19 +1,28 @@
-import { Modal, Pressable, StyleSheet, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '@/theme';
 import { AppText } from './AppText';
 import { IconButton } from './IconButton';
 
-type Props = { visible: boolean; onClose: () => void; title?: string; children: React.ReactNode };
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+  /** Scroll the body and cap the sheet's height. Use for lists that can outgrow the screen. */
+  scroll?: boolean;
+  /** Pinned below the scroll area — keeps a primary action visible (e.g. "Add 3 transactions"). */
+  footer?: React.ReactNode;
+};
 
 /** Bottom sheet (slide-up modal with a dimmed backdrop). Tap outside or ✕ to close. */
-export function Sheet({ visible, onClose, title, children }: Props) {
+export function Sheet({ visible, onClose, title, children, scroll, footer }: Props) {
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xl }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xl }, scroll && styles.sheetCapped]}>
           <View style={styles.handle} />
           {title ? (
             <View style={styles.header}>
@@ -21,7 +30,19 @@ export function Sheet({ visible, onClose, title, children }: Props) {
               <IconButton icon="close" tone="muted" size={36} onPress={onClose} accessibilityLabel="Close" />
             </View>
           ) : null}
-          {children}
+          {scroll ? (
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            children
+          )}
+          {footer}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -39,6 +60,10 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     gap: spacing.lg,
   },
+  // Leave the backdrop reachable at the top so tapping outside still closes the sheet.
+  sheetCapped: { maxHeight: '88%' },
+  scroll: { flexGrow: 0 },
+  scrollContent: { gap: spacing.lg, paddingBottom: spacing.xs },
   handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.border },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 });

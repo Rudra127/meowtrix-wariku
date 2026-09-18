@@ -1,138 +1,292 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Amount, AppText, Badge, Button, Card, IconButton, ProgressBar, Screen, SectionHeader, Sheet, type IconName } from '@/components/ui';
+import { useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Amount,
+  AppText,
+  Button,
+  Card,
+  IconButton,
+  ProgressBar,
+  SectionHeader,
+  type IconName,
+} from '@/components/ui';
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, TAB_BAR_CLEARANCE } from '@/theme';
 import { AddTransactionSheet } from './AddTransactionSheet';
-import { BalanceCard } from './BalanceCard';
-import { FocusCard } from './FocusCard';
+import { BalanceCard, type BalanceAction } from './BalanceCard';
+import { BudgetsSheet } from './BudgetsSheet';
+import { categoryMeta } from './categories';
 import { monthName } from './dates';
-import { budgets, categories, openingBalance, sampleTransactions, summary, type Transaction } from './sampleData';
+import { FocusCard } from './FocusCard';
+import { GoalsSheet } from './GoalsSheet';
 import { SpendingChart } from './SpendingChart';
 import { TransactionRow } from './TransactionRow';
+import { useFinanceSummary, useRefreshFinance, useTransactions, useVoiceCapabilities } from './useFinance';
+import { VoiceCaptureSheet } from './VoiceCaptureSheet';
 
-const COMING_SOON: Record<string, { title: string; body: string; icon: IconName }> = {
-  transfer: { title: 'Transfers', body: 'Move money between your accounts and keep balances in sync.', icon: 'swap-horizontal' },
-  budgets: { title: 'Budgets', body: 'Set monthly limits per category and get nudges before you overspend.', icon: 'pie-chart' },
-  goals: { title: 'Savings goals', body: 'Save toward a trip, a laptop or an emergency fund with progress tracking.', icon: 'flag' },
-  notifications: { title: 'Notifications', body: 'Bill reminders, budget alerts and weekly summaries.', icon: 'notifications' },
-  all: { title: 'All transactions', body: 'Search, filter by category and date, and export.', icon: 'list' },
-};
+type OpenSheet = 'voice' | 'add' | 'budgets' | 'goals' | null;
 
 export function MoneyScreen() {
   const currency = useCurrentUser().data?.currency ?? 'INR';
   const { plan } = usePersonalization();
-  const [transactions, setTransactions] = useState<Transaction[]>(sampleTransactions);
+  const insets = useSafeAreaInsets();
+
+  const summary = useFinanceSummary();
+  const recent = useTransactions({ limit: 8 });
+  const voice = useVoiceCapabilities();
+  const refresh = useRefreshFinance();
+
   const [hidden, setHidden] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [info, setInfo] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<OpenSheet>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Local-only additions adjust the sample balance so the UI feels real.
-  const balance = useMemo(() => {
-    const added = transactions.filter((t) => t.id.startsWith('local-')).reduce((s, t) => s + t.amount, 0);
-    return openingBalance + added;
-  }, [transactions]);
+  const data = summary.data;
+  const transactions = recent.data?.items ?? [];
 
-  const onAction = (key: string) => (key === 'add' ? setAdding(true) : setInfo(key));
-  const soon = info ? COMING_SOON[info] : null;
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  };
+
+  const onAction = (key: BalanceAction) => setSheet(key);
+
+  const announce = (message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 2600);
+  };
+
+  // First load: the header would otherwise show a confident ₹0 before the real balance arrives.
+  if (summary.isPending) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
 
   return (
-    <Screen tabBarSpace>
-      <View style={styles.header}>
-        <View>
-          <AppText variant="label">Overview · {monthName()}</AppText>
-          <AppText variant="title">Your money</AppText>
+    <View style={styles.root}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      >
+        <View style={styles.header}>
+          <View>
+            <AppText variant="label">Overview · {monthName()}</AppText>
+            <AppText variant="title">Your money</AppText>
+          </View>
+          <View style={styles.headerActions}>
+            <IconButton
+              icon="mic"
+              tone="dark"
+              onPress={() => setSheet('voice')}
+              accessibilityLabel="Add a transaction by voice"
+            />
+          </View>
         </View>
-        <View style={styles.headerActions}>
-          <IconButton icon="notifications-outline" onPress={() => setInfo('notifications')} accessibilityLabel="Notifications" />
-          <IconButton icon="add" tone="dark" onPress={() => setAdding(true)} accessibilityLabel="Add transaction" />
-        </View>
-      </View>
 
-      <BalanceCard
-        balance={balance}
-        currency={currency}
-        hidden={hidden}
-        changePct={summary.changePct}
-        onToggleHidden={() => setHidden((h) => !h)}
-        onAction={onAction}
-      />
-
-      {/* Goal from onboarding decides what leads the dashboard */}
-      <FocusCard focus={plan.moneyFocus} currency={currency} hidden={hidden} />
-
-      <Badge label="Preview · sample data, changes stay on this device" icon="construct-outline" />
-
-      <SpendingChart currency={currency} />
-
-      <View style={styles.grid}>
-        <StatTile label="Spent" icon="arrow-up-outline" minor={summary.spent} currency={currency} note="This month" hidden={hidden} />
-        <StatTile label="Saved" icon="shield-checkmark-outline" minor={summary.saved} currency={currency} note="+12% vs Aug" hidden={hidden} positive />
-        <StatTile label="Invested" icon="trending-up-outline" minor={summary.invested} currency={currency} note="SIPs & stocks" hidden={hidden} />
-        <StatTile label="Budget left" icon="wallet-outline" minor={summary.budgetLeft} currency={currency} note="11 days to go" hidden={hidden} />
-      </View>
-
-      <SectionHeader title="Budgets" action="Manage" onAction={() => setInfo('budgets')} />
-      <Card elevated style={styles.list}>
-        {budgets.map((b) => {
-          const cat = categories[b.category];
-          const ratio = b.spent / b.limit;
-          const color = ratio > 0.9 ? colors.danger : ratio > 0.75 ? colors.warning : colors.primary;
-          return (
-            <View key={b.category} style={styles.budget}>
-              <View style={styles.budgetHead}>
-                <View style={[styles.catIcon, { backgroundColor: cat.soft }]}>
-                  <Ionicons name={cat.icon} size={16} color={cat.color} />
-                </View>
-                <AppText variant="bodyStrong" style={styles.flex}>
-                  {cat.label}
-                </AppText>
-                <AppText variant="caption">
-                  {formatMoney(b.spent, currency, { decimals: false })} / {formatMoney(b.limit, currency, { decimals: false })}
-                </AppText>
-              </View>
-              <ProgressBar value={ratio} color={color} />
-            </View>
-          );
-        })}
-      </Card>
-
-      <SectionHeader title="Recent transactions" action="See all" onAction={() => setInfo('all')} />
-      <Card elevated style={styles.list}>
-        {transactions.slice(0, 8).map((tx) => (
-          <TransactionRow key={tx.id} tx={tx} currency={currency} />
-        ))}
-      </Card>
-
-      <AddTransactionSheet
-        visible={adding}
-        onClose={() => setAdding(false)}
-        currency={currency}
-        onSave={(tx) => setTransactions((prev) => [tx, ...prev])}
-      />
-
-      <Sheet visible={!!soon} onClose={() => setInfo(null)} title={soon?.title}>
-        {soon && (
+        {summary.isError ? (
+          <Card elevated style={styles.errorCard}>
+            <Ionicons name="cloud-offline-outline" size={22} color={colors.danger} />
+            <AppText variant="bodyStrong">Couldn&apos;t load your money</AppText>
+            <AppText variant="caption">{getErrorMessage(summary.error)}</AppText>
+            <Button title="Try again" variant="secondary" size="sm" onPress={onRefresh} />
+          </Card>
+        ) : (
           <>
-            <View style={styles.soonIcon}>
-              <Ionicons name={soon.icon} size={28} color={colors.primary} />
+            <BalanceCard
+              balance={data?.balance.total ?? 0}
+              currency={currency}
+              hidden={hidden}
+              changePct={data?.changePct ?? 0}
+              onToggleHidden={() => setHidden((h) => !h)}
+              onAction={onAction}
+            />
+
+            {/* Goal from onboarding decides what leads the dashboard */}
+            <FocusCard focus={plan.moneyFocus} summary={data} currency={currency} hidden={hidden} />
+
+            <SpendingChart currency={currency} />
+
+            <View style={styles.grid}>
+              <StatTile
+                label="Earned"
+                icon="arrow-down-outline"
+                minor={data?.totals.income ?? 0}
+                currency={currency}
+                note="This month"
+                hidden={hidden}
+                positive
+              />
+              <StatTile
+                label="Spent"
+                icon="arrow-up-outline"
+                minor={data?.totals.expense ?? 0}
+                currency={currency}
+                note={`${data?.totals.count ?? 0} transactions`}
+                hidden={hidden}
+              />
+              <StatTile
+                label="Left over"
+                icon="wallet-outline"
+                minor={data?.totals.net ?? 0}
+                currency={currency}
+                note="Income − spending"
+                hidden={hidden}
+                positive={(data?.totals.net ?? 0) >= 0}
+              />
+              <StatTile
+                label="Budget left"
+                icon="pie-chart-outline"
+                minor={data?.budgetTotals.remaining ?? 0}
+                currency={currency}
+                note={
+                  data?.budgetTotals.limit
+                    ? `${data.daysLeftInMonth} days to go`
+                    : 'No budgets set'
+                }
+                hidden={hidden}
+                positive={(data?.budgetTotals.remaining ?? 0) >= 0}
+              />
             </View>
-            <AppText variant="body" color={colors.textMuted}>
-              {soon.body}
-            </AppText>
-            <Badge label="Coming soon" tone="accent" icon="sparkles" />
-            <Button title="Got it" variant="secondary" onPress={() => setInfo(null)} />
+
+            <SectionHeader title="Budgets" action="Manage" onAction={() => setSheet('budgets')} />
+            {data && data.budgets.length > 0 ? (
+              <Card elevated style={styles.list}>
+                {data.budgets.map((b) => {
+                  const meta = categoryMeta(b.category);
+                  const color = b.overspent ? colors.danger : b.ratio > 0.75 ? colors.warning : colors.primary;
+                  return (
+                    <View key={b.category} style={styles.budget}>
+                      <View style={styles.budgetHead}>
+                        <View style={[styles.catIcon, { backgroundColor: meta.soft }]}>
+                          <Ionicons name={meta.icon} size={16} color={meta.color} />
+                        </View>
+                        <AppText variant="bodyStrong" style={styles.flex}>
+                          {meta.label}
+                        </AppText>
+                        <AppText variant="caption">
+                          {formatMoney(b.spent, currency, { decimals: false })} /{' '}
+                          {formatMoney(b.limit, currency, { decimals: false })}
+                        </AppText>
+                      </View>
+                      <ProgressBar value={Math.min(1, b.ratio)} color={color} />
+                    </View>
+                  );
+                })}
+              </Card>
+            ) : (
+              <EmptyCard
+                icon="pie-chart-outline"
+                title="No budgets yet"
+                body="Set a monthly limit and Wariku will warn you before you overspend."
+                action="Add a budget"
+                onPress={() => setSheet('budgets')}
+              />
+            )}
+
+            <SectionHeader title="Savings goals" action="Manage" onAction={() => setSheet('goals')} />
+            {data && data.goals.items.length > 0 ? (
+              <Card elevated style={styles.list}>
+                {data.goals.items.map((goal) => (
+                  <View key={goal.id} style={styles.budget}>
+                    <View style={styles.budgetHead}>
+                      <View style={[styles.catIcon, { backgroundColor: colors.accentSoft }]}>
+                        <Ionicons name="flag" size={16} color={colors.primary} />
+                      </View>
+                      <AppText variant="bodyStrong" style={styles.flex}>
+                        {goal.name}
+                      </AppText>
+                      <AppText variant="caption">
+                        {formatMoney(goal.savedAmount, currency, { decimals: false })} /{' '}
+                        {formatMoney(goal.targetAmount, currency, { decimals: false })}
+                      </AppText>
+                    </View>
+                    <ProgressBar value={Math.min(1, goal.ratio)} color={goal.achieved ? colors.success : colors.primary} />
+                  </View>
+                ))}
+              </Card>
+            ) : (
+              <EmptyCard
+                icon="flag-outline"
+                title="No savings goals"
+                body="Give your saving a target — an emergency fund, a trip, new gear."
+                action="Create a goal"
+                onPress={() => setSheet('goals')}
+              />
+            )}
+
+            <SectionHeader title="Recent transactions" />
+            {recent.isPending ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : transactions.length > 0 ? (
+              <Card elevated style={styles.list}>
+                {transactions.map((tx) => (
+                  <TransactionRow key={tx.id} tx={tx} currency={currency} />
+                ))}
+              </Card>
+            ) : (
+              <EmptyCard
+                icon="mic-outline"
+                title="Nothing recorded yet"
+                body={
+                  voice.data?.speechToText
+                    ? 'Tap the mic and say “spent 250 on coffee”. Wariku fills in the rest.'
+                    : 'Add your first expense and your dashboard comes alive.'
+                }
+                action={voice.data?.speechToText ? 'Add by voice' : 'Add a transaction'}
+                onPress={() => setSheet(voice.data?.speechToText ? 'voice' : 'add')}
+              />
+            )}
           </>
         )}
-      </Sheet>
-    </Screen>
+      </ScrollView>
+
+      {toast && (
+        <View style={[styles.toast, { bottom: TAB_BAR_CLEARANCE }]} pointerEvents="none">
+          <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+          <AppText variant="caption" color={colors.textOnPrimary}>
+            {toast}
+          </AppText>
+        </View>
+      )}
+
+      <VoiceCaptureSheet
+        visible={sheet === 'voice'}
+        onClose={() => setSheet(null)}
+        currency={currency}
+        speechEnabled={voice.data?.speechToText ?? false}
+        onSaved={(count) => announce(`Added ${count} ${count === 1 ? 'transaction' : 'transactions'}`)}
+      />
+      <AddTransactionSheet
+        visible={sheet === 'add'}
+        onClose={() => setSheet(null)}
+        currency={currency}
+        onSaved={() => announce('Transaction added')}
+      />
+      <BudgetsSheet visible={sheet === 'budgets'} onClose={() => setSheet(null)} currency={currency} />
+      <GoalsSheet visible={sheet === 'goals'} onClose={() => setSheet(null)} currency={currency} />
+    </View>
   );
 }
 
-type TileProps = { label: string; icon: IconName; minor: number; currency: string; note: string; hidden: boolean; positive?: boolean };
+type TileProps = {
+  label: string;
+  icon: IconName;
+  minor: number;
+  currency: string;
+  note: string;
+  hidden: boolean;
+  positive?: boolean;
+};
 
 function StatTile({ label, icon, minor, currency, note, hidden, positive }: TileProps) {
   return (
@@ -151,7 +305,41 @@ function StatTile({ label, icon, minor, currency, note, hidden, positive }: Tile
   );
 }
 
+function EmptyCard({
+  icon,
+  title,
+  body,
+  action,
+  onPress,
+}: {
+  icon: IconName;
+  title: string;
+  body: string;
+  action: string;
+  onPress: () => void;
+}) {
+  return (
+    <Card elevated style={styles.emptyCard}>
+      <View style={styles.emptyIcon}>
+        <Ionicons name={icon} size={24} color={colors.primary} />
+      </View>
+      <AppText variant="bodyStrong">{title}</AppText>
+      <AppText variant="caption" center>
+        {body}
+      </AppText>
+      <Button title={action} variant="secondary" size="sm" onPress={onPress} />
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
+  content: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: TAB_BAR_CLEARANCE,
+    gap: spacing.lg,
+  },
   flex: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerActions: { flexDirection: 'row', gap: spacing.sm },
@@ -170,12 +358,25 @@ const styles = StyleSheet.create({
   budget: { gap: spacing.sm, paddingVertical: spacing.xs },
   budgetHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   catIcon: { width: 30, height: 30, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
-  soonIcon: {
-    width: 56,
-    height: 56,
+  emptyCard: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl },
+  emptyIcon: {
+    width: 52,
+    height: 52,
     borderRadius: radius.md,
     backgroundColor: colors.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  errorCard: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl },
+  toast: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.ink,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
 });

@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema(
     level: { type: String, enum: LEVELS, default: null },
     goal: { type: String, enum: GOALS, default: null },
     currency: { type: String, trim: true, uppercase: true, default: "INR", maxlength: 3 },
+    /**
+     * IANA zone, sent by the app on onboarding. Decides which calendar month a transaction
+     * belongs to — see backend/utils/dates.js for why UTC grouping is wrong here.
+     */
+    timezone: { type: String, trim: true, default: "Asia/Kolkata" },
   },
   {
     timestamps: true,

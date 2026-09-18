@@ -84,6 +84,8 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
       </Stack.Protected>
       {/* OAuth deep-link landing route; must be reachable in both states. */}
       <Stack.Screen name="sso-callback" />
+      {/* Brokers bounce back here after sign-in (see features/integrations/useBrokerage.ts). */}
+      <Stack.Screen name="broker-callback" />
     </Stack>
   );
 }

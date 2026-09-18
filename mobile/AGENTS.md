@@ -34,11 +34,12 @@ mobile/
 ├── app/                        expo-router routes — keep these THIN (re-export a feature screen)
 │   ├── _layout.tsx             Fonts (Manrope), providers (Clerk, React Query), Stack.Protected auth guard
 │   ├── sso-callback.tsx        OAuth deep-link landing route
+│   ├── broker-callback.tsx     Deep-link landing after a broker connect (safety net; usually handled inline)
 │   ├── (auth)/                 Signed-out only: sign-in, sign-up, forgot-password
 │   ├── (onboarding)/           Signed-in, not yet onboarded: level + goal questionnaire
 │   └── (tabs)/                 Signed-in + onboarded: index (Learn), money, ask (Ask AI), profile
 ├── src/
-│   ├── api/                    client.ts (fetch + Bearer token), useApi.ts, endpoints.ts, types.ts, queryClient.ts
+│   ├── api/                    client.ts (fetch + Bearer + postForm upload), useApi.ts, endpoints.ts, types.ts, queryClient.ts
 │   ├── config/env.ts           ALL env access (EXPO_PUBLIC_*) + API URL resolution
 │   ├── hooks/                  useCurrentUser (GET /auth/me), useKeyboardVisible
 │   ├── features/
@@ -46,10 +47,13 @@ mobile/
 │   │   ├── learn/              LearnScreen (path, level, achievements), LessonNode, LessonPlayerScreen,
 │   │   │                       player/ (ExerciseInput, FeedbackPanel, ResultsView, ComboChip), useLearn.ts (API hooks),
 │   │   │                       gamification.ts (levels, achievements, praise copy) — real data from /learn/*
-│   │   ├── finance/            MoneyScreen, BalanceCard, SpendingChart, AddTransactionSheet, sampleData.ts ← placeholder
-│   │   ├── chat/               ChatScreen, useChat, MessageContent (mini markdown), AiOrb, TypingDots
-│   │   ├── onboarding/         OnboardingScreen, OptionCard, options.ts (questions + per-goal plans), usePersonalization
-│   │   └── profile/            ProfileScreen, SettingsRow (edit goal/level/currency)
+│   │   ├── finance/            MoneyScreen + live data (useFinance hooks), voice capture
+│   │   │                       (useVoiceCapture, VoiceCaptureSheet, DraftRow), budgets/goals sheets,
+│   │   │                       categories.ts (shared category map — mirrors backend)
+│   │   ├── integrations/       BrokerageCard + useBrokerage(provider) — Upstox/Zerodha via expo-web-browser
+│   │   ├── chat/               ChatScreen, useChat (+ describeTools), MessageContent, AiOrb, TypingDots
+│   │   ├── onboarding/         OnboardingScreen (sends device timezone), OptionCard, options.ts, usePersonalization
+│   │   └── profile/            ProfileScreen, SettingsRow (edit goal/level/currency), Connected accounts
 │   ├── components/
 │   │   ├── ui/                 Design system — ALWAYS reuse these (see below)
 │   │   ├── fx/                 Confetti, CountUp (celebration effects)
@@ -78,9 +82,18 @@ black pill CTAs, big numbers with muted decimals, floating pill tab bar, Manrope
 Animated values: create with `useState(() => new Animated.Value(0))` — the React Compiler lint rule
 rejects `useRef(...).current` during render.
 
-**Placeholder data:** `features/finance/sampleData.ts` drives the Money UI until its backend endpoints exist
-(docs/ROADMAP.md). Learn uses the real backend (`npm run seed:learn` in backend/ loads the lessons). Screens show a "Preview · sample data" badge.
-Replace the imports with React Query hooks when wiring real data; keep the component props the same.
+**No placeholder data left.** Learn reads `/api/v1/learn/*` (run `npm run seed:learn` in backend/ to load the
+lessons) and Money reads `/api/v1/finance/*` via `features/finance/useFinance.ts`.
+
+**Money conventions on the client:** amounts are integer **minor units** everywhere; `Transaction.amount` is
+positive and `type` carries the direction — use `signedAmount()` from `features/finance/categories.ts` to
+display. Category presentation (icon/colour/label) also lives in `categories.ts`; its ids must match
+`backend/database/models/categories.js`.
+
+**Voice capture:** `useVoiceCapture` records with `expo-audio`, uploads to `/finance/voice`, and returns
+**drafts** — nothing is saved until the user confirms in `VoiceCaptureSheet`. When the server has no speech
+provider (`voice.capabilities.speechToText === false`) the mic is hidden and the typed `/finance/parse` path
+is offered instead. Mic permission strings live in `app.json` (`expo-audio` plugin + iOS/Android entries).
 
 Import from `src` with the `@/` alias (`import { Button } from '@/components/ui'`).
 

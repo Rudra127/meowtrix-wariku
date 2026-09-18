@@ -26,33 +26,49 @@ backend/
 ├── config/index.js           Loads .env.<NODE_ENV>; exports `config` — read env vars ONLY through this
 ├── api/                      HTTP layer — one file per feature, thin handlers
 │   ├── auth.js               GET /auth/me, POST /auth/sync
-│   ├── user.js               PATCH/DELETE /users/me, GET /admin/users
+│   ├── user.js               PATCH/DELETE /users/me, PUT /users/me/onboarding, GET /admin/users
+│   ├── finance.js            /finance/* — transactions, budgets, goals, summary, series, voice
+│   ├── integrations.js       /integrations/:provider/* — broker connect / status / callback (generic)
 │   ├── ai.js                 POST /ai/chat
 │   ├── learn.js              GET /learn/path, /learn/stats, /learn/lessons/:slug,
 │   │                         POST check + submit + practice + practice/:id/submit
 │   └── webhooks.js           POST /webhooks/clerk (raw body, Svix-verified)
 ├── services/                 Business logic; throws AppErrors; returns plain data
-│   ├── user-service.js       Onboarding + cascade delete (fans out to feature deleteAllForUser)
-│   ├── ai-service.js         System prompt (personalised by level/goal) + message validation
+│   ├── user-service.js       Profile + onboarding; owns the account-deletion cascade (_cascadeDelete)
+│   ├── finance-service.js    Accounts/transactions/budgets/goals + the monthly dashboard rollup
+│   ├── voice-service.js      transcript → draft transactions (LLM JSON mode); drafts are NOT saved
 │   ├── learn-service.js      Path + grading + XP/streak (pure helpers exported for tests)
-│   └── practice-service.js   AI practice generation + HARD validation of the model's JSON
-├── lib/deepseek.js           DeepSeek client (the only file that talks to the LLM provider)
+│   ├── practice-service.js   AI practice generation + HARD validation of the model's JSON
+│   ├── ai-service.js         Ask AI agent loop + level-aware system prompt (personalised by level/goal)
+│   ├── ai-tools.js           Tool schemas + runner the AI calls to read the user's real data
+│   ├── brokerage-service.js  Generic broker: connect flow, daily-token lifecycle, normalised holdings
+│   └── brokerages.js         Registry (Upstox, Zerodha) + connectedBrokerage / brokerageContext helpers
+├── lib/
+│   ├── deepseek.js           DeepSeek client — chat, JSON mode, tool calling (only LLM caller)
+│   ├── transcribe.js         Speech-to-text (OpenAI-compatible /audio/transcriptions)
+│   ├── kite.js               Zerodha Kite Connect v3 — uniform broker-client interface
+│   ├── upstox.js             Upstox API v2 (free) — same uniform broker-client interface
+│   └── crypto.js             AES-256-GCM for tokens at rest + signed OAuth state (HMAC)
 ├── database/
 │   ├── connection.js         Also honours DNS_SERVERS for networks that block SRV lookups
-│   ├── models/               user.js (exports LEVELS/GOALS) + learn models (unit, lesson,
-│   │                         lesson-progress, learner-stats, practice-session)
-│   ├── repository/           ALL Mongoose queries live here (user-repository, learn-repository)
+│   ├── models/               user (LEVELS/GOALS/timezone), account, transaction, budget, goal,
+│   │                         integration, categories (canonical ids + normaliseCategory),
+│   │                         and learn models (unit, lesson, lesson-progress, learner-stats,
+│   │                         practice-session)
+│   ├── repository/           ALL Mongoose queries live here (user, finance, integration, learn)
 │   └── seed/                 learn-content.js (8 units / 33 lessons) + seed-learn.js runner
 ├── middlewares/
 │   ├── protect.js            Requires a Clerk session → sets req.user (Mongo doc)
 │   ├── isAdmin.js            After protect; requires req.user.role === "admin"
-│   └── rate-limit.js         apiLimiter (per IP, all /api) and aiLimiter (per user, LLM routes)
+│   └── rate-limit.js         apiLimiter (per IP), aiLimiter + voiceLimiter (per user, expensive routes)
 ├── utils/
-│   ├── app-errors.js         AppError + BadRequest/Validation/Unauthorized/Forbidden/NotFound/Upstream/ServiceUnavailable
+│   ├── app-errors.js         AppError + BadRequest/Validation/Unauthorized/Forbidden/NotFound/
+│   │                         ReauthRequired (409)/Upstream/ServiceUnavailable
 │   ├── error-handler.js      Global error middleware → { success:false, error:{ code, message } }
+│   ├── dates.js              Timezone-aware month maths (Intl only) — the "which month?" source of truth
 │   ├── index.js              Re-exports errors + sendSuccess(res, data, status?)
-│   └── S3Config.js, multer.js, stripe.js   Unused template utilities (kept for later: avatars, payments)
-└── tests/                    *.test.js — helpers.js sets fake Clerk keys + a local JWT signing key
+│   └── S3Config.js, stripe.js   Unused template utilities (kept for later: avatars, payments)
+└── tests/                    *.test.js — helpers.js sets fake Clerk/STT/Zerodha keys + a JWT signing key
 ```
 
 ## Environment (`.env.example` is the reference)
@@ -65,7 +81,16 @@ backend/
 | `CLERK_WEBHOOK_SIGNING_SECRET` | prod | Enables `POST /api/v1/webhooks/clerk`. |
 | `DEEPSEEK_API_KEY` | for AI | Missing → `/api/v1/ai/*` returns 503. |
 | `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL` | no | Defaults `https://api.deepseek.com`, `deepseek-chat`. |
+| `STT_API_KEY` | for voice | Missing → `POST /finance/voice` returns 503 and the app hides the mic. Typed `/finance/parse` still works. |
+| `STT_BASE_URL`, `STT_MODEL` | no | OpenAI-compatible transcription endpoint. Defaults to Groq `whisper-large-v3-turbo`. |
+| `UPSTOX_API_KEY`, `UPSTOX_API_SECRET`, `UPSTOX_REDIRECT_URL` | for holdings | **Free** broker. All three + `ENCRYPTION_KEY` to connect Upstox. Redirect URL must match the Upstox app exactly. |
+| `ZERODHA_API_KEY`, `ZERODHA_API_SECRET`, `ZERODHA_REDIRECT_URL` | for holdings | **Paid** broker. All three + `ENCRYPTION_KEY` to connect Zerodha. Redirect URL must match the Kite app exactly. |
+| `ENCRYPTION_KEY` | for holdings | 32 random bytes (hex). Encrypts broker tokens at rest. Rotating it invalidates every connection. |
+| `APP_SCHEME` | no | Deep-link scheme the OAuth callback returns to. Default `wariku` (matches `mobile/app.json`). |
 | `CLIENT_URLS` | prod web | Comma-separated browser origins for CORS. Native apps don't need it. |
+
+> **Atlas note:** put the database name in the URI path (`…mongodb.net/wariku`), or Mongoose uses `test`.
+> For the real-Mongo tests use a **separate** DB (`…/wariku_test`) — the suite drops it on teardown.
 
 ## Auth, precisely
 
@@ -89,11 +114,11 @@ All under `/api/v1`. All return the standard envelope.
 | GET | `/health` (no prefix) | — | — | `{ status, timestamp }` |
 | GET | `/auth/me` | protect | — | `{ user }` — creates the user on first call |
 | POST | `/auth/sync` | protect | — | `{ user }` — re-pulls profile from Clerk |
-| PATCH | `/users/me` | protect | `{ isOnboarded?, currency?: "USD", level?, goal? }` | `{ user }` — other fields ignored |
-| PUT | `/users/me/onboarding` | protect | `{ level, goal, currency? }` | `{ user }` — sets `isOnboarded`, `onboardedAt` |
+| PATCH | `/users/me` | protect | `{ isOnboarded?, currency?, level?, goal?, timezone? }` | `{ user }` — other fields ignored |
+| PUT | `/users/me/onboarding` | protect | `{ level, goal, currency?, timezone? }` | `{ user }` — sets `isOnboarded`, `onboardedAt` |
 | DELETE | `/users/me` | protect | — | `{ deleted: true }` — deletes in Clerk **and** Mongo |
 | GET | `/admin/users` | protect + isAdmin | `?page&limit&search` | `{ items, total, page, limit, totalPages }` |
-| POST | `/ai/chat` | protect + aiLimiter | `{ messages: [{ role: "user"\|"assistant", content }] }` (≤40, last = user, ≤4000 chars each) | `{ message: { role, content }, model, usage }` |
+| POST | `/ai/chat` | protect + aiLimiter | `{ messages: [...] }` (≤40, last = user, ≤4000 chars each) | `{ message, model, usage, toolsUsed }` — runs a tool-calling loop |
 | GET | `/learn/path` | protect | — | `{ units: [{ id, index, title, description, icon, lessons: [{ id, title, summary, xp, minutes, icon, status }] }], stats }` — units are reordered so the goal-recommended unit comes first; `status` is `"done"\|"current"\|"locked"` |
 | GET | `/learn/stats` | protect | — | `{ stats: { streakDays, longestStreak, xp, dailyGoalXp, todayXp, lessonsDone, accuracy, badges } }` |
 | GET | `/learn/lessons/:slug` | protect | — | `{ lesson: { id, unitId, unitTitle, title, summary, xp, minutes, icon, exercises: [{ type, prompt, options? }] }, progress\|null, status }` — **answers/explanations stripped**; locked lessons → 403 |
@@ -104,9 +129,53 @@ All under `/api/v1`. All return the standard envelope.
 | POST | `/learn/practice/:sessionId/submit` | protect | `{ answers: unknown[] }` (one per generated exercise) | `{ score, correct, total, passed, xpEarned, results, stats }` — **single-use**; awards 2 XP per correct answer and keeps the streak alive, but never completes a lesson or unlocks the next one |
 | POST | `/webhooks/clerk` | Svix signature | Clerk event | `{ received }` |
 
+**Money** — all `protect`, all filtered by `req.user._id`. Amounts are **integer minor units**.
+
+| Method | Path | Body / query | Returns `data` |
+|---|---|---|---|
+| GET | `/finance/summary` | `?month=2026-09` | Full monthly dashboard: balance, totals, per-category, budgets, goals, `changePct` |
+| GET | `/finance/series` | `?period=week\|month\|year&month=` | `{ period, points:[{label,key,value}], total }` — expense chart |
+| GET | `/finance/transactions` | `?month\|from\|to\|type\|category\|source\|q\|limit\|skip` | `{ items, total, limit, skip, currency }` |
+| POST | `/finance/transactions` | one tx, **or** `{ transactions:[…], source }` | `{ transaction }` or `{ transactions, created }` (201) |
+| PATCH/DELETE | `/finance/transactions/:id` | — | `{ transaction }` / `{ deleted }` |
+| GET/POST | `/finance/accounts` | `{ name, type?, openingBalance? }` | `{ accounts }` / `{ account }` |
+| PATCH/DELETE | `/finance/accounts/:id` | — | `{ account }` / `{ archived }` (soft delete) |
+| GET | `/finance/budgets` | `?month=` | `{ month, budgets:[{category,limit,spent,remaining,ratio,overspent}] }` |
+| PUT | `/finance/budgets` | `{ category, limit, month? }` | `{ budget }` — creates or overwrites |
+| POST | `/finance/budgets/copy-previous` | `{ month? }` | `{ month, budgets }` |
+| DELETE | `/finance/budgets/:category` | `?month=` | `{ deleted }` |
+| GET/POST | `/finance/goals` | `{ name, targetAmount, savedAmount?, targetDate? }` | `{ goals }` / `{ goal }` |
+| PATCH/DELETE | `/finance/goals/:id` | — | `{ goal }` / `{ deleted }` |
+| POST | `/finance/goals/:id/contribute` | `{ amount }` (+/−) | `{ goal }` |
+
+**Voice capture** — `protect` + `voiceLimiter`. These **return drafts and write nothing**; the app confirms
+them, then POSTs to `/finance/transactions` with `source:"voice"`.
+
+| Method | Path | Body / query | Returns `data` |
+|---|---|---|---|
+| GET | `/finance/voice/capabilities` | — | `{ speechToText: boolean, categories:{expense,income} }` |
+| POST | `/finance/voice` | multipart: `audio` (clip), `language?` | `{ transcript, drafts, unclear, message }` |
+| POST | `/finance/parse` | `{ text }` | same shape — the typed fallback |
+
+**Linked accounts** — provider-generic (`:provider` ∈ `upstox`, `zerodha`; see `services/brokerages.js`).
+
+| Method | Path | Auth | Returns `data` |
+|---|---|---|---|
+| GET | `/integrations` | protect | `{ integrations: [status, …] }` — one per supported broker |
+| GET | `/integrations/:provider` | protect | `{ connected, needsReauth, brokerUserName, … }` (never the token) |
+| GET | `/integrations/:provider/login-url` | protect | `{ url, expiresInSeconds, redirectUrl }` |
+| GET | `/integrations/:provider/callback` | **public** (signed `state`) | 302 → `wariku://broker-callback?provider=…&status=…` |
+| DELETE | `/integrations/:provider` | protect | `{ disconnected: true }` |
+
+Adding a broker = write `lib/<broker>.js` against the uniform client interface, then add one line to
+`services/brokerages.js`. Nothing else changes. Holdings are intentionally **not** an HTTP endpoint —
+they're reachable only through the AI tools (`ai-tools.js`), matching the decision to surface them only in
+Ask AI.
+
 Error codes in use: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` /
-`BAD_REQUEST` / `DUPLICATE` 400, `PAYLOAD_TOO_LARGE` 413, `RATE_LIMITED` 429, `INTERNAL_ERROR` 500,
-`UPSTREAM_ERROR` 502, `SERVICE_UNAVAILABLE` 503, `BAD_SIGNATURE` 400 (webhook).
+`BAD_REQUEST` / `DUPLICATE` 400, `PAYLOAD_TOO_LARGE` 413, `REAUTH_REQUIRED` 409 (broker session expired),
+`RATE_LIMITED` 429, `INTERNAL_ERROR` 500, `UPSTREAM_ERROR` 502, `SERVICE_UNAVAILABLE` 503,
+`BAD_SIGNATURE` 400 (webhook).
 
 ## AI-generated practice (`services/practice-service.js`)
 
@@ -153,10 +222,12 @@ the word "JSON" in the prompt — a test asserts that, so don't remove it.
    export default learn;
    ```
    Express 5 forwards rejected promises to the error handler — **no try/catch needed**; just `throw`.
-5. **Register** in `express-app.js` next to `auth(app); user(app); ai(app);` (before the 404 handler).
+5. **Register** in `express-app.js` next to `auth(app); user(app); finance(app); integrations(app); ai(app);`
+   (before the 404 handler).
 6. **Test** in `tests/learn.test.js` (unit-test the service with a fake repository; add HTTP 401 checks).
 7. **Document** the endpoints in the table above and add typed calls in `mobile/src/api/endpoints.ts`.
-8. If users own data in the new collection, delete it in `UserService.deleteMe` and `handleClerkUserDeleted`.
+8. If users own data in the new collection, add its repository to `UserService.#purgeUserData` so the
+   account-deletion cascade removes it (covered by the deletion test in `tests/integration.test.js`).
 
 ## Gotchas
 
@@ -165,3 +236,13 @@ the word "JSON" in the prompt — a test asserts that, so don't remove it.
 - JSON body limit is 1 MB. Add a route-specific parser if you need file uploads (see `utils/multer.js`).
 - `backend/.gitignore` ignores lockfiles (`package-lock.json`) — that's the template's choice; CI uses `npm install`.
 - `winston` writes `error.log` only in production.
+- **Voice/AI money flow:** amounts cross the AI/voice boundary in **major** units (rupees) because the model
+  reasons in rupees; `ai-tools.js` (`toMajor`/`fromMajor`) and `voice-service.js` convert to/from minor units
+  once, at the edge. Everything stored stays minor units.
+- **Never blind-save AI-parsed transactions.** Voice/parse endpoints return drafts for the user to confirm;
+  only `record_transaction` (an explicit chat request) and confirmed drafts write.
+- The broker callback is **public** — it authenticates via the HMAC-signed `state` in the login URL, since
+  the browser redirect carries no Clerk session. Broker access tokens expire daily (Kite ~06:00 IST, Upstox
+  ~03:30 IST) → `REAUTH_REQUIRED`; the app shows a "Reconnect" state.
+- Node `--test` on Windows: use `npm test` (globs `tests/*.test.js`); a bare `node --test tests/` fails there.
+- Tests are offline — inject `fetchImpl`/fake repositories (see `tests/ai.test.js`, `tests/integrations.test.js`).

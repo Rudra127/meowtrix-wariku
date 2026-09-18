@@ -1,17 +1,17 @@
 /**
  * Email + password sign-up with email-code verification (Clerk Core 3 `useSignUp` API), plus Google.
- * First/last name are sent only when filled in — enable "First and last name" in the Clerk
- * Dashboard (User & authentication) for them to be accepted. See docs/AUTH.md.
+ * First name is sent only when filled in (requires "First and last name" enabled in the Clerk
+ * Dashboard). See docs/AUTH.md.
  */
 import { useSignUp } from '@clerk/expo';
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Button, FormError, Screen, TextField } from '@/components/ui';
-import { AuthHeader, OrDivider } from '@/features/auth/AuthHeader';
-import { getBannerMessage, getErrorMessage } from '@/lib/errors';
+import { StyleSheet, View } from 'react-native';
+import { AppText, Button, CodeInput, FormError, TextField } from '@/components/ui';
+import { AuthLayout, OrDivider } from '@/features/auth/AuthLayout';
 import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton';
-import { colors, spacing } from '@/theme';
+import { getBannerMessage, getErrorMessage } from '@/lib/errors';
+import { colors, fonts, spacing } from '@/theme';
 
 type Step = 'details' | 'verify-email';
 
@@ -39,9 +39,9 @@ export default function SignUpScreen() {
     setStep('verify-email');
   };
 
-  const onVerify = async () => {
+  const onVerify = async (value = code) => {
     setFormError(null);
-    const { error } = await signUp.verifications.verifyEmailCode({ code: code.trim() });
+    const { error } = await signUp.verifications.verifyEmailCode({ code: value.trim() });
     if (error) return setFormError(getBannerMessage(error, ['code']));
 
     if (signUp.status === 'complete') {
@@ -64,41 +64,41 @@ export default function SignUpScreen() {
 
   if (step === 'verify-email') {
     return (
-      <Screen edges={[]}>
-        <AuthHeader title="Verify your email" subtitle={`Enter the 6-digit code we sent to ${email.trim()}.`} />
+      <AuthLayout
+        showBack
+        hero={['Almost', 'there.']}
+        title="Verify your email"
+        subtitle={`Enter the 6-digit code we sent to ${email.trim()}.`}
+      >
         <FormError message={formError} />
-        <TextField
-          label="Verification code"
-          value={code}
-          onChangeText={setCode}
-          keyboardType="number-pad"
-          textContentType="oneTimeCode"
-          autoComplete="one-time-code"
-          maxLength={6}
-          autoFocus
-          error={errors.fields.code?.message}
-          onSubmitEditing={onVerify}
-        />
-        <Button title="Verify and continue" loading={busy} disabled={code.trim().length < 6} onPress={onVerify} />
-        <Button title="Resend code" variant="ghost" disabled={busy} onPress={onResend} />
-      </Screen>
+        <CodeInput value={code} onChange={setCode} onComplete={onVerify} error={errors.fields.code?.message} />
+        <Button title="Verify and continue" loading={busy} disabled={code.length < 6} onPress={() => onVerify()} />
+        <Button title="Resend code" variant="ghost" size="sm" disabled={busy} onPress={onResend} />
+      </AuthLayout>
     );
   }
 
   return (
-    <Screen edges={[]}>
-      <AuthHeader title="Create your account" subtitle="Learn money skills, track spending, ask anything." />
+    <AuthLayout
+      showBack
+      hero={['Start your', 'money journey.']}
+      title="Create your account"
+      subtitle="Bite-sized lessons, smarter spending, and an AI that gets money."
+    >
       <FormError message={formError ?? errors.fields.captcha?.message} />
       <TextField
         label="First name (optional)"
+        icon="person-outline"
         value={firstName}
         onChangeText={setFirstName}
         textContentType="givenName"
         autoComplete="given-name"
+        placeholder="What should we call you?"
         error={errors.fields.firstName?.message}
       />
       <TextField
         label="Email"
+        icon="mail-outline"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -111,6 +111,7 @@ export default function SignUpScreen() {
       />
       <TextField
         label="Password"
+        icon="lock-closed-outline"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -121,20 +122,21 @@ export default function SignUpScreen() {
         onSubmitEditing={onSignUp}
       />
       <Button title="Create account" loading={busy} disabled={!email.trim() || !password} onPress={onSignUp} />
-      <OrDivider />
+      <OrDivider label="or continue with" />
       <GoogleSignInButton onError={setFormError} />
       <View style={styles.footer}>
-        <Text style={styles.muted}>Already have an account?</Text>
+        <AppText variant="body" color={colors.textMuted}>
+          Already have an account?
+        </AppText>
         <Link href="/sign-in" dismissTo style={styles.link}>
           Sign in
         </Link>
       </View>
-    </Screen>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  link: { color: colors.primary, fontWeight: '600', fontSize: 15 },
-  footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.md },
-  muted: { color: colors.textMuted, fontSize: 15 },
+  link: { color: colors.primary, fontFamily: fonts.bold, fontSize: 15 },
+  footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.sm },
 });

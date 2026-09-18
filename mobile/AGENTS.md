@@ -27,29 +27,51 @@ needed for native-only features (Apple Sign-In, passkeys, Clerk's prebuilt nativ
 
 ```
 mobile/
-├── app/                        expo-router routes — keep these THIN (compose features, no business logic)
-│   ├── _layout.tsx             Providers (Clerk, React Query) + Stack.Protected auth guard
+├── app/                        expo-router routes — keep these THIN (re-export a feature screen)
+│   ├── _layout.tsx             Fonts (Manrope), providers (Clerk, React Query), Stack.Protected auth guard
 │   ├── sso-callback.tsx        OAuth deep-link landing route
 │   ├── (auth)/                 Signed-out only: sign-in, sign-up, forgot-password
 │   └── (tabs)/                 Signed-in only: index (Learn), money, ask (Ask AI), profile
 ├── src/
-│   ├── api/
-│   │   ├── client.ts           fetch wrapper: base URL, JSON, Bearer token, envelope unwrap, ApiError, 401 retry
-│   │   ├── useApi.ts           useApi() → client bound to Clerk's getToken — use this in components/hooks
-│   │   ├── endpoints.ts        One typed function per backend endpoint (authApi, usersApi, aiApi, …)
-│   │   ├── types.ts            Backend response types (mirror backend models)
-│   │   └── queryClient.ts      TanStack Query client + queryKeys
+│   ├── api/                    client.ts (fetch + Bearer token), useApi.ts, endpoints.ts, types.ts, queryClient.ts
 │   ├── config/env.ts           ALL env access (EXPO_PUBLIC_*) + API URL resolution
-│   ├── hooks/useCurrentUser.ts Backend user (GET /auth/me) via React Query
+│   ├── hooks/                  useCurrentUser (GET /auth/me), useKeyboardVisible
 │   ├── features/
-│   │   ├── auth/               AuthHeader, GoogleSignInButton
-│   │   └── chat/               useChat + ChatScreen (Ask AI tab)
-│   ├── components/ui/          Button, TextField, Screen, Card, FormError — reuse before creating new ones
-│   ├── components/ComingSoon.tsx  Placeholder used by Learn/Money tabs
-│   ├── lib/errors.ts           getErrorMessage / getBannerMessage (Clerk + API errors → text)
-│   └── theme/index.ts          colors, spacing, radius, typography tokens
+│   │   ├── auth/               AuthLayout (green hero + form sheet), BrandMark, GoogleSignInButton
+│   │   ├── learn/              LearnScreen, LessonNode, sampleData.ts  ← placeholder content
+│   │   ├── finance/            MoneyScreen, BalanceCard, SpendingChart, AddTransactionSheet, sampleData.ts ← placeholder
+│   │   ├── chat/               ChatScreen, useChat, MessageContent (mini markdown), AiOrb, TypingDots
+│   │   └── profile/            ProfileScreen, SettingsRow
+│   ├── components/
+│   │   ├── ui/                 Design system — ALWAYS reuse these (see below)
+│   │   └── navigation/         FloatingTabBar (custom pill tab bar)
+│   ├── lib/                    errors.ts (Clerk/API → text), format.ts (money in minor units, greeting)
+│   └── theme/index.ts          colors, spacing, radius, fonts, typography, shadow, TAB_BAR_CLEARANCE
 └── app.json                    name, scheme `wariku`, bundle id `com.wariku.app`, plugins
 ```
+
+## Design system (`src/components/ui`)
+
+Look: warm off-white canvas, white rounded cards, **deep forest green** hero surfaces, **lime** accent,
+black pill CTAs, big numbers with muted decimals, floating pill tab bar, Manrope font.
+
+| Component | Use for |
+|---|---|
+| `AppText variant=…` | **All text** (`display`, `title`, `heading`, `subheading`, `body`, `bodyStrong`, `caption`, `label`). Never use raw `<Text>` or `fontWeight` — Manrope weights are separate families. |
+| `Button variant=primary\|brand\|accent\|secondary\|ghost\|danger` | Pill buttons; `accent` on green surfaces |
+| `IconButton tone=surface\|muted\|dark\|glass\|accent` | Round icon buttons; `glass` on green surfaces |
+| `PressableScale` | Any custom tappable (spring + haptic) |
+| `Card tone elevated`, `SectionHeader`, `Badge`, `Avatar` | Layout pieces |
+| `Amount minor currency` | Money numbers (minor units, muted decimals, `hidden` mask) |
+| `TextField`, `CodeInput`, `SegmentedControl`, `ProgressBar`, `Sheet`, `FormError` | Inputs, bottom sheets, feedback |
+| `Screen tabBarSpace` | Screen container; pass `tabBarSpace` on tab screens so content clears the floating tab bar |
+
+Animated values: create with `useState(() => new Animated.Value(0))` — the React Compiler lint rule
+rejects `useRef(...).current` during render.
+
+**Placeholder data:** `features/learn/sampleData.ts` and `features/finance/sampleData.ts` drive the Learn and
+Money UIs until their backend endpoints exist (docs/ROADMAP.md). Screens show a "Preview · sample data" badge.
+Replace the imports with React Query hooks when wiring real data; keep the component props the same.
 
 Import from `src` with the `@/` alias (`import { Button } from '@/components/ui'`).
 
@@ -99,9 +121,9 @@ export function useLearningPath() {
 
 ## Building a tab (e.g. Learn)
 
-1. Create `src/features/learn/` with `LearnScreen.tsx`, hooks, and components.
-2. Replace the `<ComingSoon/>` in `app/(tabs)/index.tsx` with
-   `export { LearnScreen as default } from '@/features/learn/LearnScreen';` (see `ask.tsx`).
+1. The screen lives in `src/features/<feature>/`; the route file only re-exports it
+   (`export { LearnScreen as default } from '@/features/learn/LearnScreen';`).
+2. Swap `sampleData.ts` for real API hooks (add endpoints to `src/api/endpoints.ts`).
 3. Nested screens (e.g. a lesson player) go in `app/(tabs)/…` folders or a new top-level stack inside the
    `Stack.Protected guard={isSignedIn}` block in `app/_layout.tsx`.
 4. Use theme tokens and `components/ui` — no hard-coded colours.

@@ -1,17 +1,15 @@
 import { StyleSheet, View, type ViewProps } from 'react-native';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, shadow, spacing } from '@/theme';
 
-export function Card({ style, ...rest }: ViewProps) {
-  return <View style={[styles.card, style]} {...rest} />;
+type Props = ViewProps & { tone?: 'surface' | 'primary' | 'muted'; elevated?: boolean };
+
+export function Card({ tone = 'surface', elevated = false, style, ...rest }: Props) {
+  return <View style={[styles.base, styles[tone], elevated && shadow.card, style]} {...rest} />;
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
+  base: { borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
+  surface: { backgroundColor: colors.surface },
+  primary: { backgroundColor: colors.primary },
+  muted: { backgroundColor: colors.surfaceMuted },
 });

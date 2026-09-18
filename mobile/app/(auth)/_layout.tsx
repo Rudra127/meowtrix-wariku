@@ -4,19 +4,6 @@ import { colors } from '@/theme';
 export const unstable_settings = { initialRouteName: 'sign-in' };
 
 export default function AuthLayout() {
-  return (
-    <Stack
-      screenOptions={{
-        headerShadowVisible: false,
-        headerTitle: '',
-        headerTintColor: colors.text,
-        headerStyle: { backgroundColor: colors.background },
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-      <Stack.Screen name="sign-up" />
-      <Stack.Screen name="forgot-password" />
-    </Stack>
-  );
+  // Screens draw their own hero + back button (features/auth/AuthLayout).
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.primary } }} />;
 }

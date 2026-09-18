@@ -1,62 +1,71 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, type PressableProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius, spacing } from '@/theme';
+import { AppText } from './AppText';
+import { PressableScale } from './PressableScale';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'brand' | 'accent' | 'secondary' | 'ghost' | 'danger';
+type Size = 'md' | 'sm';
 
-type Props = Omit<PressableProps, 'style' | 'children'> & {
+type Props = {
   title: string;
+  onPress?: () => void;
   variant?: Variant;
+  size?: Size;
   loading?: boolean;
+  disabled?: boolean;
   icon?: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
+  containerStyle?: StyleProp<ViewStyle>;
 };
 
-export function Button({ title, variant = 'primary', loading, disabled, icon, style, ...rest }: Props) {
+const VARIANTS: Record<Variant, { bg: string; fg: string; border: string }> = {
+  primary: { bg: colors.ink, fg: colors.textOnPrimary, border: colors.ink },
+  brand: { bg: colors.primary, fg: colors.textOnPrimary, border: colors.primary },
+  accent: { bg: colors.accent, fg: colors.textOnAccent, border: colors.accent },
+  secondary: { bg: colors.surface, fg: colors.text, border: colors.border },
+  ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent' },
+  danger: { bg: colors.dangerSoft, fg: colors.danger, border: colors.dangerSoft },
+};
+
+/** Pill button. `primary` = black CTA, `brand` = green, `accent` = lime (use on dark surfaces). */
+export function Button({ title, onPress, variant = 'primary', size = 'md', loading, disabled, icon, style, containerStyle }: Props) {
+  const v = VARIANTS[variant];
   const isDisabled = disabled || loading;
-  const palette = VARIANTS[variant];
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
+    <PressableScale
+      onPress={onPress}
       disabled={isDisabled}
-      style={({ pressed }) => [
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
+      containerStyle={containerStyle}
+      style={[
         styles.base,
-        { backgroundColor: pressed ? palette.pressed : palette.bg, borderColor: palette.border },
+        size === 'sm' ? styles.sm : styles.md,
+        { backgroundColor: v.bg, borderColor: v.border },
         isDisabled && styles.disabled,
         style,
       ]}
-      {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={palette.fg} />
+        <ActivityIndicator color={v.fg} />
       ) : (
-        <>
+        <View style={styles.row}>
           {icon}
-          <Text style={[styles.label, { color: palette.fg }]}>{title}</Text>
-        </>
+          <AppText variant="bodyStrong" color={v.fg} style={size === 'sm' && styles.smText}>
+            {title}
+          </AppText>
+        </View>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 
-const VARIANTS: Record<Variant, { bg: string; pressed: string; fg: string; border: string }> = {
-  primary: { bg: colors.primary, pressed: colors.primaryPressed, fg: colors.textOnPrimary, border: colors.primary },
-  secondary: { bg: colors.background, pressed: colors.surface, fg: colors.text, border: colors.border },
-  ghost: { bg: 'transparent', pressed: colors.surface, fg: colors.primary, border: 'transparent' },
-  danger: { bg: colors.background, pressed: colors.dangerSoft, fg: colors.danger, border: colors.border },
-};
-
 const styles = StyleSheet.create({
-  base: {
-    minHeight: 50,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  label: { fontSize: 16, fontWeight: '600' },
-  disabled: { opacity: 0.6 },
+  base: { borderRadius: radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  md: { minHeight: 54, paddingHorizontal: spacing.xl },
+  sm: { minHeight: 38, paddingHorizontal: spacing.lg },
+  smText: { fontSize: 13 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  disabled: { opacity: 0.45 },
 });

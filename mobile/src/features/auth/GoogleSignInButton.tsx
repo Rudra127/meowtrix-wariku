@@ -4,7 +4,6 @@ import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Button } from '@/components/ui';
-import { colors } from '@/theme';
 import { getErrorMessage } from '@/lib/errors';
 
 // Completes the auth session when the OAuth browser redirects back into the app (web + Android).
@@ -60,7 +59,7 @@ export function GoogleSignInButton({ onError }: Props) {
       variant="secondary"
       loading={loading}
       onPress={onPress}
-      icon={<Ionicons name="logo-google" size={18} color={colors.text} />}
+      icon={<Ionicons name="logo-google" size={18} color="#EA4335" />}
     />
   );
 }

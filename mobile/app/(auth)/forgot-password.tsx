@@ -5,8 +5,8 @@
 import { useSignIn } from '@clerk/expo';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Button, FormError, Screen, TextField } from '@/components/ui';
-import { AuthHeader } from '@/features/auth/AuthHeader';
+import { Button, CodeInput, FormError, TextField } from '@/components/ui';
+import { AuthLayout } from '@/features/auth/AuthLayout';
 import { getBannerMessage, getErrorMessage } from '@/lib/errors';
 
 type Step = 'email' | 'reset';
@@ -53,47 +53,33 @@ export default function ForgotPasswordScreen() {
 
   if (step === 'reset') {
     return (
-      <Screen edges={[]}>
-        <AuthHeader title="Set a new password" subtitle={`Enter the code sent to ${email.trim()}.`} />
+      <AuthLayout showBack hero={['Fresh start,', 'new password.']} title="Set a new password" subtitle={`Enter the code sent to ${email.trim()}.`}>
         <FormError message={formError} />
-        <TextField
-          label="Reset code"
-          value={code}
-          onChangeText={setCode}
-          keyboardType="number-pad"
-          textContentType="oneTimeCode"
-          autoComplete="one-time-code"
-          maxLength={6}
-          autoFocus
-          error={errors.fields.code?.message}
-        />
+        <CodeInput value={code} onChange={setCode} error={errors.fields.code?.message} />
         <TextField
           label="New password"
+          icon="lock-closed-outline"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
           textContentType="newPassword"
           autoComplete="new-password"
+          placeholder="Use a long, unique password"
           error={errors.fields.password?.message}
           onSubmitEditing={onReset}
         />
-        <Button
-          title="Reset password"
-          loading={busy}
-          disabled={code.trim().length < 6 || !password}
-          onPress={onReset}
-        />
-        <Button title="Resend code" variant="ghost" disabled={busy} onPress={onSendCode} />
-      </Screen>
+        <Button title="Reset password" loading={busy} disabled={code.length < 6 || !password} onPress={onReset} />
+        <Button title="Resend code" variant="ghost" size="sm" disabled={busy} onPress={onSendCode} />
+      </AuthLayout>
     );
   }
 
   return (
-    <Screen edges={[]}>
-      <AuthHeader title="Forgot password?" subtitle="We'll email you a code to reset it." />
+    <AuthLayout showBack hero={['Locked out?', "We've got you."]} title="Forgot password" subtitle="We'll email you a code to reset it.">
       <FormError message={formError} />
       <TextField
         label="Email"
+        icon="mail-outline"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -101,11 +87,12 @@ export default function ForgotPasswordScreen() {
         keyboardType="email-address"
         textContentType="emailAddress"
         autoComplete="email"
+        placeholder="you@example.com"
         autoFocus
         error={errors.fields.identifier?.message}
         onSubmitEditing={onSendCode}
       />
       <Button title="Send reset code" loading={busy} disabled={!email.trim()} onPress={onSendCode} />
-    </Screen>
+    </AuthLayout>
   );
 }

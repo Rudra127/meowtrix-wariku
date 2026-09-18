@@ -10,13 +10,13 @@ A mobile app that makes people better with money. Three main tabs:
 
 | Tab | Route | What it is | Status |
 |---|---|---|---|
-| **Learn** | `mobile/app/(tabs)/index.tsx` | Duolingo-style finance lessons: units → lessons → quizzes, XP, streaks | Placeholder |
-| **Money** | `mobile/app/(tabs)/money.tsx` | Personal finance management: transactions, budgets, goals | Placeholder |
-| **Ask AI** | `mobile/app/(tabs)/ask.tsx` | Finance chatbot on **DeepSeek**, answers questions about the user's own finances | Minimal working chat |
+| **Learn** | `mobile/app/(tabs)/index.tsx` | Duolingo-style finance lessons: units → lessons → quizzes, XP, streaks | UI done, sample data |
+| **Money** | `mobile/app/(tabs)/money.tsx` | Personal finance management: transactions, budgets, goals | UI done, sample data |
+| **Ask AI** | `mobile/app/(tabs)/ask.tsx` | Finance chatbot on **DeepSeek**, answers questions about the user's own finances | Working chat (DeepSeek) |
 | Profile | `mobile/app/(tabs)/profile.tsx` | Account, backend-connection status, sign out, delete account | Done |
 
 **What's done:** the skeleton. Clerk auth end-to-end (mobile ↔ backend), user sync into MongoDB, a typed
-API client, a DeepSeek client, and placeholder tabs. **What's next:** the features — see `docs/ROADMAP.md`.
+API client, a DeepSeek client, a design system, and tab UIs (Learn/Money on sample data). **What's next:** the features — see `docs/ROADMAP.md`.
 
 ## Repo map
 

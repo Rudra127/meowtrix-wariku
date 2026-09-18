@@ -7,12 +7,12 @@
 import { useSignIn } from '@clerk/expo';
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Button, FormError, Screen, TextField } from '@/components/ui';
-import { AuthHeader, OrDivider } from '@/features/auth/AuthHeader';
-import { getBannerMessage, getErrorMessage } from '@/lib/errors';
+import { StyleSheet, View } from 'react-native';
+import { AppText, Button, CodeInput, FormError, TextField } from '@/components/ui';
+import { AuthLayout, OrDivider } from '@/features/auth/AuthLayout';
 import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton';
-import { colors, spacing } from '@/theme';
+import { getBannerMessage, getErrorMessage } from '@/lib/errors';
+import { colors, fonts, spacing } from '@/theme';
 
 type Step = 'credentials' | 'email-code';
 
@@ -58,9 +58,9 @@ export default function SignInScreen() {
     await continueFlow();
   };
 
-  const onVerifyCode = async () => {
+  const onVerifyCode = async (value = code) => {
     setFormError(null);
-    const { error } = await signIn.mfa.verifyEmailCode({ code: code.trim() });
+    const { error } = await signIn.mfa.verifyEmailCode({ code: value.trim() });
     if (error) return setFormError(getBannerMessage(error, ['code']));
     await continueFlow();
   };
@@ -80,34 +80,28 @@ export default function SignInScreen() {
 
   if (step === 'email-code') {
     return (
-      <Screen>
-        <AuthHeader title="Check your email" subtitle={`We sent a 6-digit code to ${email.trim()}.`} />
+      <AuthLayout
+        hero={['Quick check,', "it's you."]}
+        title="Check your email"
+        subtitle={`New device detected. Enter the 6-digit code we sent to ${email.trim()}.`}
+      >
         <FormError message={formError} />
-        <TextField
-          label="Verification code"
-          value={code}
-          onChangeText={setCode}
-          keyboardType="number-pad"
-          textContentType="oneTimeCode"
-          autoComplete="one-time-code"
-          maxLength={6}
-          autoFocus
-          error={errors.fields.code?.message}
-          onSubmitEditing={onVerifyCode}
-        />
-        <Button title="Verify" loading={busy} disabled={code.trim().length < 6} onPress={onVerifyCode} />
-        <Button title="Resend code" variant="ghost" disabled={busy} onPress={onResendCode} />
-        <Button title="Use a different account" variant="ghost" disabled={busy} onPress={onStartOver} />
-      </Screen>
+        <CodeInput value={code} onChange={setCode} onComplete={onVerifyCode} error={errors.fields.code?.message} />
+        <Button title="Verify" loading={busy} disabled={code.length < 6} onPress={() => onVerifyCode()} />
+        <View style={styles.row}>
+          <Button title="Resend code" variant="ghost" size="sm" disabled={busy} onPress={onResendCode} />
+          <Button title="Use another account" variant="ghost" size="sm" disabled={busy} onPress={onStartOver} />
+        </View>
+      </AuthLayout>
     );
   }
 
   return (
-    <Screen>
-      <AuthHeader title="Welcome back" subtitle="Sign in to keep learning and tracking your money." />
+    <AuthLayout hero={['Money skills,', 'made simple.']} title="Welcome back" subtitle="Sign in to continue your streak.">
       <FormError message={formError} />
       <TextField
         label="Email"
+        icon="mail-outline"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -120,32 +114,37 @@ export default function SignInScreen() {
       />
       <TextField
         label="Password"
+        icon="lock-closed-outline"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
         textContentType="password"
         autoComplete="current-password"
+        placeholder="Your password"
         error={errors.fields.password?.message}
         onSubmitEditing={onSignIn}
       />
-      <Link href="/forgot-password" style={styles.link}>
+      <Link href="/forgot-password" style={styles.forgot}>
         Forgot password?
       </Link>
       <Button title="Sign in" loading={busy} disabled={!email.trim() || !password} onPress={onSignIn} />
-      <OrDivider />
+      <OrDivider label="or continue with" />
       <GoogleSignInButton onError={setFormError} />
       <View style={styles.footer}>
-        <Text style={styles.muted}>New to Wariku?</Text>
+        <AppText variant="body" color={colors.textMuted}>
+          New to Wariku?
+        </AppText>
         <Link href="/sign-up" style={styles.link}>
           Create an account
         </Link>
       </View>
-    </Screen>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  link: { color: colors.primary, fontWeight: '600', fontSize: 15 },
-  footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.md },
-  muted: { color: colors.textMuted, fontSize: 15 },
+  forgot: { alignSelf: 'flex-end', color: colors.primary, fontFamily: fonts.bold, fontSize: 14, marginTop: -spacing.xs },
+  link: { color: colors.primary, fontFamily: fonts.bold, fontSize: 15 },
+  footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.sm },
+  row: { flexDirection: 'row', justifyContent: 'space-between' },
 });

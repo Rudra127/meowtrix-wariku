@@ -1,38 +1,66 @@
+/**
+ * Full-screen lesson player (route: app/lesson/[slug].tsx).
+ *
+ *   play    → one exercise at a time: pick → "Check" (POST …/check, instant feedback, answer
+ *             locks) → Continue. Correct streaks build an in-lesson combo.
+ *   submit  → POST /learn/lessons/:slug/submit re-grades every answer server-side; that result
+ *             is the source of truth for XP, progress and streaks.
+ *   results → celebration/encouragement, XP + streak, per-question review, retry.
+ *
+ * Pieces live in ./player (inputs, results, helpers).
+ */
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
-import type { ExerciseResult, LessonAnswer, LessonSubmitResult, PublicExercise } from '@/api/types';
-import { AppText, Badge, Button, Card, IconButton, PressableScale, ProgressBar, Screen } from '@/components/ui';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import type { AnswerCheck, LessonAnswer } from '@/api/types';
+import { AppText, Badge, Button, FormError, IconButton, ProgressBar, Sheet } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errors';
 import { colors, fonts, radius, spacing } from '@/theme';
-import { useLessonDetail, useSubmitLesson } from './useLearn';
+import { nudge, praise } from './gamification';
+import { ComboChip } from './player/ComboChip';
+import { EXERCISE_META, fillMissing, isAnswered } from './player/exerciseMeta';
+import { ExerciseInput } from './player/ExerciseInput';
+import { FeedbackPanel } from './player/FeedbackPanel';
+import { ResultsView } from './player/ResultsView';
+import { useCheckAnswer, useLearningPath, useLessonDetail, useSubmitLesson } from './useLearn';
 
 type Props = { slug: string };
 
-/**
- * Full-screen lesson player. Two phases:
- *   1. "play"    — one exercise at a time, local answers collected in `answers`.
- *   2. "results" — submit answers to the server, then render per-exercise feedback
- *                  from the graded response (correct/wrong + explanation + XP + streak).
- *
- * Grading is entirely server-side (see backend/services/learn-service.js) — this screen
- * never has the correct answers until after submit.
- */
 export function LessonPlayerScreen({ slug }: Props) {
   const router = useRouter();
   const detail = useLessonDetail(slug);
   const submit = useSubmitLesson(slug);
+  const check = useCheckAnswer(slug);
+  // Stats before this lesson — lets the results screen detect level-ups / new badges.
+  const statsBefore = useLearningPath().data?.stats;
+  const [startStats] = useState(() => statsBefore);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<LessonAnswer[]>([]);
+  const [checks, setChecks] = useState<(AnswerCheck | undefined)[]>([]);
+  const [combo, setCombo] = useState(0);
+  const [bestCombo, setBestCombo] = useState(0);
+  const [shake] = useState(() => new Animated.Value(0));
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [enter] = useState(() => new Animated.Value(1));
 
   const lesson = detail.data?.lesson;
   const exercises = lesson?.exercises ?? [];
   const total = exercises.length;
-  const isLast = index === total - 1;
   const current = exercises[index];
-  const currentAnswer = answers[index] ?? null;
+  const isLast = index === total - 1;
+  const answered = isAnswered(current, answers[index]);
+  const feedback = checks[index];
+  const answeredCount = exercises.filter((ex, i) => isAnswered(ex, answers[i])).length;
+
+  // Slide each question in.
+  useEffect(() => {
+    enter.setValue(0);
+    Animated.timing(enter, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [index, enter]);
 
   const setAnswer = (value: LessonAnswer) =>
     setAnswers((prev) => {
@@ -41,483 +69,218 @@ export function LessonPlayerScreen({ slug }: Props) {
       return next;
     });
 
-  const canAdvance = currentAnswer !== null && currentAnswer !== undefined && !submit.isPending;
+  const runShake = () =>
+    Animated.sequence(
+      [10, -10, 7, -7, 3, 0].map((toValue) => Animated.timing(shake, { toValue, duration: 55, useNativeDriver: true })),
+    ).start();
 
-  const advance = () => {
-    Haptics.selectionAsync().catch(() => {});
-    if (isLast) {
-      submit.mutate(fillMissing(answers, total));
-    } else {
-      setIndex((i) => Math.min(i + 1, total - 1));
-    }
+  /** Step 1: grade this answer for instant feedback (nothing is stored yet). */
+  const checkCurrent = () => {
+    if (!answered || check.isPending || feedback) return;
+    check.mutate(
+      { index, answer: answers[index] ?? null },
+      {
+        onSuccess: (res) => {
+          setChecks((prev) => {
+            const next = prev.slice();
+            next[index] = res;
+            return next;
+          });
+          if (res.isCorrect) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            const nextCombo = combo + 1;
+            setCombo(nextCombo);
+            setBestCombo((b) => Math.max(b, nextCombo));
+          } else {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+            setCombo(0);
+            runShake();
+          }
+        },
+      },
+    );
   };
 
-  const goBack = () => router.back();
+  /** Step 2: next question, or submit the whole lesson for official grading. */
+  const advance = () => {
+    if (submit.isPending) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (isLast) submit.mutate(fillMissing(answers, total));
+    else setIndex((i) => i + 1);
+  };
 
-  // -- loading / error -----------------------------------------------------------------
+  const retry = () => {
+    submit.reset();
+    check.reset();
+    setAnswers([]);
+    setChecks([]);
+    setCombo(0);
+    setBestCombo(0);
+    setIndex(0);
+  };
 
+  const leave = () => {
+    setConfirmLeave(false);
+    router.back();
+  };
+  // Only ask for confirmation if there's progress to lose.
+  const requestClose = () => (answeredCount > 0 && !submit.data ? setConfirmLeave(true) : router.back());
+
+  // -- loading / error -------------------------------------------------------------------
   if (detail.isPending && !detail.data) {
     return (
-      <Screen edges={['top', 'bottom']} scroll={false}>
-        <Header progress={0} onClose={goBack} />
+      <Shell>
+        <TopBar progress={0} onClose={router.back} />
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
+          <AppText variant="caption">Loading lesson…</AppText>
         </View>
-      </Screen>
+      </Shell>
     );
   }
   if (detail.isError || !lesson) {
     return (
-      <Screen edges={['top', 'bottom']}>
-        <Header progress={0} onClose={goBack} />
-        <Card tone="muted" style={styles.errorCard}>
-          <Ionicons name="cloud-offline-outline" size={22} color={colors.danger} />
-          <AppText variant="bodyStrong">Couldn&apos;t load this lesson</AppText>
-          <AppText variant="caption" color={colors.textMuted}>
+      <Shell>
+        <TopBar progress={0} onClose={router.back} />
+        <View style={styles.center}>
+          <View style={styles.errorIcon}>
+            <Ionicons name={detail.error && 'status' in detail.error && detail.error.status === 403 ? 'lock-closed' : 'cloud-offline-outline'} size={28} color={colors.danger} />
+          </View>
+          <AppText variant="heading" center>
+            Couldn’t open this lesson
+          </AppText>
+          <AppText variant="body" center color={colors.textMuted}>
             {getErrorMessage(detail.error)}
           </AppText>
           <View style={styles.errorActions}>
-            <Button title="Back" variant="secondary" onPress={goBack} />
+            <Button title="Back" variant="secondary" onPress={router.back} />
             <Button title="Retry" onPress={() => detail.refetch()} />
           </View>
-        </Card>
-      </Screen>
+        </View>
+      </Shell>
     );
   }
 
-  // -- results phase -------------------------------------------------------------------
-
+  // -- results ---------------------------------------------------------------------------
   if (submit.data) {
-    return <ResultsView result={submit.data} exercises={exercises} onClose={goBack} />;
-  }
-
-  // -- play phase ----------------------------------------------------------------------
-
-  const progress = total > 0 ? index / total : 0;
-
-  return (
-    <Screen edges={['top', 'bottom']} scroll={false}>
-      <Header progress={progress} onClose={goBack} />
-      <View style={styles.body}>
-        <AppText variant="label" color={colors.textMuted}>
-          Question {index + 1} of {total} · +{lesson.xp} XP total
-        </AppText>
-        <AppText variant="title" style={styles.prompt}>
-          {current.prompt}
-        </AppText>
-
-        <ExerciseInput exercise={current} value={currentAnswer} onChange={setAnswer} />
-
-        {submit.isError && (
-          <AppText variant="caption" color={colors.danger}>
-            {getErrorMessage(submit.error)}
-          </AppText>
-        )}
-      </View>
-
-      <View style={styles.footer}>
-        <Button
-          title={isLast ? 'Finish lesson' : 'Continue'}
-          variant={isLast ? 'brand' : 'primary'}
-          onPress={advance}
-          disabled={!canAdvance}
-          loading={submit.isPending}
-          icon={!isLast && <Ionicons name="arrow-forward" size={16} color={colors.textOnPrimary} />}
-        />
-      </View>
-    </Screen>
-  );
-}
-
-// ---- Header ------------------------------------------------------------------------
-
-function Header({ progress, onClose }: { progress: number; onClose: () => void }) {
-  return (
-    <View style={styles.header}>
-      <IconButton icon="close" onPress={onClose} accessibilityLabel="Close lesson" />
-      <ProgressBar value={Math.max(0, Math.min(1, progress))} style={styles.headerProgress} />
-    </View>
-  );
-}
-
-// ---- Exercise renderers ------------------------------------------------------------
-
-function ExerciseInput({
-  exercise,
-  value,
-  onChange,
-}: {
-  exercise: PublicExercise;
-  value: LessonAnswer;
-  onChange: (v: LessonAnswer) => void;
-}) {
-  switch (exercise.type) {
-    case 'multiple_choice':
-      return <MultipleChoice options={exercise.options ?? []} value={value} onChange={onChange} />;
-    case 'true_false':
-      return <TrueFalse value={value} onChange={onChange} />;
-    case 'fill_number':
-      return <FillNumber value={value} onChange={onChange} />;
-    case 'order_steps':
-      return <OrderSteps options={exercise.options ?? []} value={value} onChange={onChange} />;
-    default:
-      return null;
-  }
-}
-
-function MultipleChoice({
-  options,
-  value,
-  onChange,
-}: {
-  options: string[];
-  value: LessonAnswer;
-  onChange: (v: LessonAnswer) => void;
-}) {
-  return (
-    <View style={styles.choiceList}>
-      {options.map((label, i) => {
-        const selected = value === i;
-        return (
-          <PressableScale
-            key={`${i}-${label}`}
-            onPress={() => onChange(i)}
-            style={[styles.choice, selected && styles.choiceSelected]}
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-          >
-            <View style={[styles.bullet, selected && styles.bulletSelected]}>
-              <AppText variant="bodyStrong" color={selected ? colors.textOnPrimary : colors.text}>
-                {String.fromCharCode(65 + i)}
-              </AppText>
-            </View>
-            <AppText variant="body" style={styles.flex}>
-              {label}
-            </AppText>
-          </PressableScale>
-        );
-      })}
-    </View>
-  );
-}
-
-function TrueFalse({ value, onChange }: { value: LessonAnswer; onChange: (v: LessonAnswer) => void }) {
-  return (
-    <View style={styles.tfRow}>
-      {[
-        { label: 'True', v: true, icon: 'checkmark' as const },
-        { label: 'False', v: false, icon: 'close' as const },
-      ].map(({ label, v, icon }) => {
-        const selected = value === v;
-        return (
-          <PressableScale
-            key={label}
-            onPress={() => onChange(v)}
-            style={[styles.tfCard, selected && styles.choiceSelected]}
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-          >
-            <View style={[styles.tfIcon, selected && styles.bulletSelected]}>
-              <Ionicons name={icon} size={22} color={selected ? colors.textOnPrimary : colors.text} />
-            </View>
-            <AppText variant="bodyStrong">{label}</AppText>
-          </PressableScale>
-        );
-      })}
-    </View>
-  );
-}
-
-function FillNumber({ value, onChange }: { value: LessonAnswer; onChange: (v: LessonAnswer) => void }) {
-  const [raw, setRaw] = useState<string>(typeof value === 'number' ? String(value) : '');
-  return (
-    <View style={styles.fillWrap}>
-      <TextInput
-        value={raw}
-        onChangeText={(text) => {
-          setRaw(text);
-          const parsed = Number(text.replace(/,/g, ''));
-          onChange(Number.isFinite(parsed) && text.trim() !== '' ? parsed : null);
-        }}
-        keyboardType="numeric"
-        placeholder="Type your answer"
-        placeholderTextColor={colors.textSubtle}
-        style={styles.fillInput}
-        returnKeyType="done"
+    return (
+      <ResultsView
+        result={submit.data}
+        exercises={exercises}
+        answers={answers}
+        lessonTitle={lesson.title}
+        bestCombo={bestCombo}
+        statsBefore={startStats}
+        onRetry={retry}
+        onDone={router.back}
       />
-      <AppText variant="caption" color={colors.textMuted}>
-        Enter a number — no need to include currency symbols.
-      </AppText>
-    </View>
-  );
-}
+    );
+  }
 
-function OrderSteps({
-  options,
-  value,
-  onChange,
-}: {
-  options: string[];
-  value: LessonAnswer;
-  onChange: (v: LessonAnswer) => void;
-}) {
-  // Stable shuffled display order — one permutation per mount, so re-renders don't reshuffle.
-  // Elements are indices into the original `options` array (the server's canonical order).
-  const shuffled = useMemo(() => shuffleIndices(options.length), [options.length]);
-  const current = Array.isArray(value) ? (value as number[]) : [];
-
-  const toggle = (originalIndex: number) => {
-    if (current.includes(originalIndex)) {
-      onChange(current.filter((i) => i !== originalIndex));
-    } else {
-      onChange([...current, originalIndex]);
-    }
+  // -- play ------------------------------------------------------------------------------
+  const meta = EXERCISE_META[current.type];
+  const animatedStyle = {
+    opacity: enter,
+    transform: [{ translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }],
   };
 
   return (
-    <View style={styles.orderWrap}>
-      <AppText variant="caption" color={colors.textMuted}>
-        Tap the steps in the correct order.
-      </AppText>
-      <View style={styles.choiceList}>
-        {shuffled.map((originalIndex) => {
-          const position = current.indexOf(originalIndex);
-          const selected = position >= 0;
-          return (
-            <PressableScale
-              key={originalIndex}
-              onPress={() => toggle(originalIndex)}
-              style={[styles.choice, selected && styles.choiceSelected]}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-            >
-              <View style={[styles.bullet, selected && styles.bulletSelected]}>
-                <AppText variant="bodyStrong" color={selected ? colors.textOnPrimary : colors.text}>
-                  {selected ? position + 1 : '·'}
-                </AppText>
-              </View>
-              <AppText variant="body" style={styles.flex}>
-                {options[originalIndex]}
+    <Shell>
+      <TopBar progress={(index + (feedback ? 1 : 0)) / total} onClose={requestClose} counter={`${index + 1}/${total}`} combo={combo} />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <Animated.View style={[styles.question, animatedStyle]}>
+            <View style={styles.metaRow}>
+              <Badge icon={meta.icon} label={meta.label} tone="accent" />
+              <AppText variant="caption" numberOfLines={1} style={styles.lessonName}>
+                {lesson.title}
               </AppText>
-            </PressableScale>
-          );
-        })}
-      </View>
-      {current.length > 0 && (
-        <PressableScale onPress={() => onChange([])} style={styles.clearBtn}>
-          <AppText variant="caption" color={colors.primary}>
-            Clear order
+            </View>
+            <AppText variant="title">{current.prompt}</AppText>
+            <Animated.View style={{ transform: [{ translateX: shake }] }}>
+              <ExerciseInput
+                key={index}
+                exercise={current}
+                value={answers[index] ?? null}
+                onChange={setAnswer}
+                onSubmit={checkCurrent}
+                feedback={feedback}
+              />
+            </Animated.View>
+          </Animated.View>
+        </ScrollView>
+
+        {feedback ? (
+          <FeedbackPanel
+            check={feedback}
+            exercise={current}
+            title={feedback.isCorrect ? (combo >= 3 ? `${combo} in a row!` : praise(index)) : nudge(index)}
+            isLast={isLast}
+            loading={submit.isPending}
+            onContinue={advance}
+          />
+        ) : (
+          <View style={styles.footer}>
+            <FormError message={check.isError ? getErrorMessage(check.error) : submit.isError ? getErrorMessage(submit.error) : null} />
+            <Button title="Check" onPress={checkCurrent} disabled={!answered} loading={check.isPending} />
+          </View>
+        )}
+        {feedback && submit.isError && (
+          <View style={styles.footer}>
+            <FormError message={getErrorMessage(submit.error)} />
+          </View>
+        )}
+      </KeyboardAvoidingView>
+
+      <Sheet visible={confirmLeave} onClose={() => setConfirmLeave(false)} title="Leave this lesson?">
+        <AppText variant="body" color={colors.textMuted}>
+          You’ve answered {answeredCount} of {total}. Your answers won’t be saved if you leave now.
+        </AppText>
+        <Button title="Keep learning" onPress={() => setConfirmLeave(false)} />
+        <Button title="Leave lesson" variant="danger" onPress={leave} />
+      </Sheet>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <StatusBar style="dark" />
+      {children}
+    </SafeAreaView>
+  );
+}
+
+function TopBar({ progress, onClose, counter, combo = 0 }: { progress: number; onClose: () => void; counter?: string; combo?: number }) {
+  return (
+    <View style={styles.topBar}>
+      <IconButton icon="close" tone="surface" size={40} onPress={onClose} accessibilityLabel="Close lesson" />
+      <ProgressBar value={progress} height={10} color={combo >= 3 ? colors.success : colors.primary} style={styles.flex} />
+      <ComboChip combo={combo} />
+      {counter ? (
+        <View style={styles.counter}>
+          <AppText variant="caption" color={colors.text} style={styles.bold}>
+            {counter}
           </AppText>
-        </PressableScale>
-      )}
+        </View>
+      ) : null}
     </View>
   );
 }
 
-// ---- Results view ------------------------------------------------------------------
-
-function ResultsView({
-  result,
-  exercises,
-  onClose,
-}: {
-  result: LessonSubmitResult;
-  exercises: PublicExercise[];
-  onClose: () => void;
-}) {
-  const passed = result.passed;
-  return (
-    <Screen edges={['top', 'bottom']}>
-      <Header progress={1} onClose={onClose} />
-
-      <View style={[styles.resultHero, passed ? styles.resultHeroPassed : styles.resultHeroFailed]}>
-        <View style={[styles.resultBadge, passed ? styles.resultBadgePassed : styles.resultBadgeFailed]}>
-          <Ionicons
-            name={passed ? 'trophy' : 'reload'}
-            size={28}
-            color={passed ? colors.primary : colors.textOnPrimary}
-          />
-        </View>
-        <AppText variant="title" color={passed ? colors.textOnPrimary : colors.textOnPrimary}>
-          {passed ? 'Lesson complete!' : 'Nice try'}
-        </AppText>
-        <AppText variant="body" color={colors.textOnPrimaryMuted}>
-          You got {result.correct} of {result.total} right ({Math.round(result.score * 100)}%).
-        </AppText>
-        <View style={styles.resultChips}>
-          <Badge tone="accent" icon="flash" label={`+${result.xpEarned} XP`} />
-          <Badge icon="flame" label={`${result.stats.streakDays}-day streak`} />
-          {passed && <Badge tone="success" icon="checkmark" label="Passed" />}
-        </View>
-      </View>
-
-      <AppText variant="heading">Review</AppText>
-      {result.results.map((r) => (
-        <ReviewCard key={r.index} result={r} exercise={exercises[r.index]} />
-      ))}
-
-      <Button title="Back to path" variant="brand" onPress={onClose} />
-    </Screen>
-  );
-}
-
-function ReviewCard({ result, exercise }: { result: ExerciseResult; exercise: PublicExercise | undefined }) {
-  const tone = result.isCorrect ? colors.success : colors.danger;
-  const bg = result.isCorrect ? colors.successSoft : colors.dangerSoft;
-  return (
-    <Card style={[styles.reviewCard, { borderColor: tone, backgroundColor: bg }]}>
-      <View style={styles.reviewHead}>
-        <Ionicons
-          name={result.isCorrect ? 'checkmark-circle' : 'close-circle'}
-          size={20}
-          color={tone}
-        />
-        <AppText variant="bodyStrong" color={tone} style={styles.flex}>
-          {result.isCorrect ? 'Correct' : 'Not quite'}
-        </AppText>
-      </View>
-      {exercise && (
-        <AppText variant="body" color={colors.text}>
-          {exercise.prompt}
-        </AppText>
-      )}
-      {!result.isCorrect && (
-        <AppText variant="caption" color={colors.textMuted}>
-          Correct answer: {formatAnswer(result.correctAnswer, exercise)}
-        </AppText>
-      )}
-      {result.explanation && (
-        <AppText variant="body" color={colors.text} style={styles.explanation}>
-          {result.explanation}
-        </AppText>
-      )}
-    </Card>
-  );
-}
-
-// ---- helpers -----------------------------------------------------------------------
-
-function fillMissing(answers: LessonAnswer[], total: number): LessonAnswer[] {
-  const out: LessonAnswer[] = [];
-  for (let i = 0; i < total; i += 1) out.push(answers[i] ?? null);
-  return out;
-}
-
-function shuffleIndices(n: number): number[] {
-  const arr = Array.from({ length: n }, (_, i) => i);
-  for (let i = arr.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function formatAnswer(answer: number | boolean | number[], exercise: PublicExercise | undefined): string {
-  if (typeof answer === 'boolean') return answer ? 'True' : 'False';
-  if (Array.isArray(answer) && exercise?.options) {
-    return answer.map((i) => exercise.options?.[i] ?? String(i)).join(' → ');
-  }
-  if (typeof answer === 'number' && exercise?.type === 'multiple_choice' && exercise.options) {
-    return exercise.options[answer] ?? String(answer);
-  }
-  return String(answer);
-}
-
-// ---- styles ------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  headerProgress: { flex: 1 },
-  body: { flex: 1, gap: spacing.lg, paddingTop: spacing.lg },
-  prompt: { lineHeight: 34 },
-  footer: { paddingBottom: spacing.md },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  errorCard: { gap: spacing.sm, alignItems: 'flex-start' },
-  errorActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-
-  choiceList: { gap: spacing.sm },
-  choice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    minHeight: 60,
-  },
-  choiceSelected: { borderColor: colors.primary, backgroundColor: colors.accentSoft },
-  bullet: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bulletSelected: { backgroundColor: colors.primary },
-
-  tfRow: { flexDirection: 'row', gap: spacing.md },
-  tfCard: {
-    flex: 1,
-    gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 120,
-  },
-  tfIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  fillWrap: { gap: spacing.sm },
-  fillInput: {
-    fontFamily: fonts.bold,
-    fontSize: 28,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    minHeight: 64,
-  },
-  orderWrap: { gap: spacing.md },
-  clearBtn: { alignSelf: 'flex-start' },
-
-  resultHero: {
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    gap: spacing.sm,
-    alignItems: 'flex-start',
-  },
-  resultHeroPassed: { backgroundColor: colors.primary },
-  resultHeroFailed: { backgroundColor: colors.primaryMuted },
-  resultBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  resultBadgePassed: { backgroundColor: colors.accent },
-  resultBadgeFailed: { backgroundColor: colors.primary },
-  resultChips: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.md },
-
-  reviewCard: { gap: spacing.sm, borderWidth: 1.5 },
-  reviewHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  explanation: { marginTop: spacing.xs },
+  bold: { fontFamily: fonts.bold },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
+  counter: { backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6 },
+  body: { flexGrow: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.xl },
+  question: { gap: spacing.xl },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  lessonName: { flex: 1, textAlign: 'right' },
+  footer: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.sm },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, paddingHorizontal: spacing.xxl },
+  errorIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center' },
+  errorActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
 });

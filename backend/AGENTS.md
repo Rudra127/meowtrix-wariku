@@ -12,7 +12,7 @@ npm run dev        # nodemon, loads .env.dev
 npm run prod       # node, loads .env.prod
 npm start          # same as dev (the VM's PM2 process uses this — see .github/workflows/cicd.yaml)
 npm test           # node:test + supertest, fully offline
-TEST_MONGODB_URI=mongodb://127.0.0.1:27017/wariku_test npm test   # + real-Mongo auth flow tests
+TEST_MONGODB_URI=mongodb://127.0.0.1:27017/wariku_test npm test   # + real-Mongo tests (each file uses its own DB via testMongoUri())
 npm run lint
 npm run seed:learn # upsert Learn content (units, lessons, exercises) from database/seed/learn-content.js
 ```
@@ -28,7 +28,7 @@ backend/
 │   ├── auth.js               GET /auth/me, POST /auth/sync
 │   ├── user.js               PATCH/DELETE /users/me, GET /admin/users
 │   ├── ai.js                 POST /ai/chat
-│   ├── learn.js              GET /learn/path, /learn/stats, /learn/lessons/:slug, POST submit
+│   ├── learn.js              GET /learn/path, /learn/stats, /learn/lessons/:slug, POST check + submit
 │   └── webhooks.js           POST /webhooks/clerk (raw body, Svix-verified)
 ├── services/                 Business logic; throws AppErrors; returns plain data
 │   ├── user-service.js       Onboarding + cascade delete (fans out to feature deleteAllForUser)
@@ -95,6 +95,7 @@ All under `/api/v1`. All return the standard envelope.
 | GET | `/learn/path` | protect | — | `{ units: [{ id, index, title, description, icon, lessons: [{ id, title, summary, xp, minutes, icon, status }] }], stats }` — units are reordered so the goal-recommended unit comes first; `status` is `"done"\|"current"\|"locked"` |
 | GET | `/learn/stats` | protect | — | `{ stats: { streakDays, longestStreak, xp, dailyGoalXp, todayXp, lessonsDone, accuracy, badges } }` |
 | GET | `/learn/lessons/:slug` | protect | — | `{ lesson: { id, unitId, unitTitle, title, summary, xp, minutes, icon, exercises: [{ type, prompt, options? }] }, progress\|null, status }` — **answers/explanations stripped**; locked lessons → 403 |
+| POST | `/learn/lessons/:slug/check` | protect | `{ index, answer }` | `{ index, isCorrect, correctAnswer, explanation }` — instant feedback for one question in the player; **stores nothing** (XP/progress only change on submit, which re-grades every answer) |
 | POST | `/learn/lessons/:slug/submit` | protect | `{ answers: unknown[] }` (one per exercise, in order) | `{ score, correct, total, passed, xpEarned, totalXpForLesson, results: [{ index, isCorrect, correctAnswer, explanation }], stats }` — graded server-side; `xpEarned` is the delta added this submit (retries only earn improvement) |
 | POST | `/webhooks/clerk` | Svix signature | Clerk event | `{ received }` |
 

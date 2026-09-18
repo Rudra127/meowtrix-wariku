@@ -43,13 +43,16 @@ mobile/
 │   ├── hooks/                  useCurrentUser (GET /auth/me), useKeyboardVisible
 │   ├── features/
 │   │   ├── auth/               AuthLayout (green hero + form sheet), BrandMark, GoogleSignInButton
-│   │   ├── learn/              LearnScreen, LessonNode, sampleData.ts  ← placeholder content
+│   │   ├── learn/              LearnScreen (path, level, achievements), LessonNode, LessonPlayerScreen,
+│   │   │                       player/ (ExerciseInput, FeedbackPanel, ResultsView, ComboChip), useLearn.ts (API hooks),
+│   │   │                       gamification.ts (levels, achievements, praise copy) — real data from /learn/*
 │   │   ├── finance/            MoneyScreen, BalanceCard, SpendingChart, AddTransactionSheet, sampleData.ts ← placeholder
 │   │   ├── chat/               ChatScreen, useChat, MessageContent (mini markdown), AiOrb, TypingDots
 │   │   ├── onboarding/         OnboardingScreen, OptionCard, options.ts (questions + per-goal plans), usePersonalization
 │   │   └── profile/            ProfileScreen, SettingsRow (edit goal/level/currency)
 │   ├── components/
 │   │   ├── ui/                 Design system — ALWAYS reuse these (see below)
+│   │   ├── fx/                 Confetti, CountUp (celebration effects)
 │   │   └── navigation/         FloatingTabBar (custom pill tab bar)
 │   ├── lib/                    errors.ts (Clerk/API → text), format.ts (money in minor units, greeting)
 │   └── theme/index.ts          colors, spacing, radius, fonts, typography, shadow, TAB_BAR_CLEARANCE
@@ -75,8 +78,8 @@ black pill CTAs, big numbers with muted decimals, floating pill tab bar, Manrope
 Animated values: create with `useState(() => new Animated.Value(0))` — the React Compiler lint rule
 rejects `useRef(...).current` during render.
 
-**Placeholder data:** `features/learn/sampleData.ts` and `features/finance/sampleData.ts` drive the Learn and
-Money UIs until their backend endpoints exist (docs/ROADMAP.md). Screens show a "Preview · sample data" badge.
+**Placeholder data:** `features/finance/sampleData.ts` drives the Money UI until its backend endpoints exist
+(docs/ROADMAP.md). Learn uses the real backend (`npm run seed:learn` in backend/ loads the lessons). Screens show a "Preview · sample data" badge.
 Replace the imports with React Query hooks when wiring real data; keep the component props the same.
 
 Import from `src` with the `@/` alias (`import { Button } from '@/components/ui'`).
@@ -102,6 +105,17 @@ Import from `src` with the `@/` alias (`import { Button } from '@/components/ui'
   when a user signs in from a new device). Other second factors show an explanatory error.
 - Google uses `useSSO()` from `@clerk/expo` (browser-based OAuth, works in Expo Go).
 - Dashboard setup and troubleshooting: [`docs/AUTH.md`](../docs/AUTH.md).
+
+## Learn game loop
+
+- Player (`app/lesson/[slug].tsx` → `LessonPlayerScreen`): pick → **Check** (`POST /learn/lessons/:slug/check`,
+  instant green/red feedback + explanation, answer locks, haptics, shake on wrong) → Continue. Correct answers
+  in a row build a combo (🔥 chip). **Finish** submits all answers; the server re-grades and that result is
+  the source of truth for XP/progress/streak.
+- Results: confetti on pass, count-up score/XP, level progress (level-up callout), newly unlocked achievements,
+  answer review, Try again.
+- Levels and achievements are derived client-side from `LearnerStats` in `features/learn/gamification.ts`
+  (the backend `badges` counter isn't awarded yet). Keep achievement ids stable if this moves server-side.
 
 ## Onboarding & personalisation
 

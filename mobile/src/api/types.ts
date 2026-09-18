@@ -110,6 +110,9 @@ export type ExerciseResult = {
   explanation: string;
 };
 
+/** POST /learn/lessons/:slug/check — instant feedback for one answer (nothing is stored). */
+export type AnswerCheck = ExerciseResult;
+
 export type LessonSubmitResult = {
   score: number;
   correct: number;

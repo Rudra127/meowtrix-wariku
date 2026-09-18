@@ -13,9 +13,9 @@ import LessonProgress from "../database/models/lesson-progress.js";
 import Unit from "../database/models/unit.js";
 import User from "../database/models/user.js";
 import { LESSONS, UNITS } from "../database/seed/learn-content.js";
-import { buildApp, signSessionToken, testSigningKey } from "./helpers.js";
+import { buildApp, signSessionToken, testMongoUri, testSigningKey } from "./helpers.js";
 
-const uri = process.env.TEST_MONGODB_URI;
+const uri = testMongoUri("learn");
 
 describe("Learn HTTP (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not set" }, () => {
   let app;
@@ -111,6 +111,17 @@ describe("Learn HTTP (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not set" }, (
     const pathRes = await request(app).get("/api/v1/learn/path").set(auth());
     assert.equal(pathRes.body.data.units[0].lessons[0].status, "done");
     assert.equal(pathRes.body.data.units[0].lessons[1].status, "current");
+  });
+
+  it("POST /learn/lessons/:slug/check gives instant feedback without storing anything", async () => {
+    const res = await request(app).post("/api/v1/learn/lessons/l1/check").set(auth()).send({ index: 0, answer: -1 });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.isCorrect, false);
+    assert.ok("correctAnswer" in res.body.data);
+    const locked = await request(app).post("/api/v1/learn/lessons/l14/check").set(auth()).send({ index: 0, answer: 0 });
+    assert.equal(locked.status, 403);
+    const noAuth = await request(app).post("/api/v1/learn/lessons/l1/check").send({ index: 0, answer: 0 });
+    assert.equal(noAuth.status, 401);
   });
 
   it("POST /learn/lessons/:slug/submit rejects when answers length is wrong", async () => {

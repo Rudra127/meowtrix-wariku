@@ -4,6 +4,7 @@
  */
 import type { ApiClient } from './client';
 import type {
+  AnswerCheck,
   ChatMessage,
   ChatResponse,
   Goal,
@@ -44,6 +45,9 @@ export const learnApi = {
   stats: (api: ApiClient) => api.get<{ stats: LearnerStats }>('/learn/stats'),
   /** Lesson with exercises — answers, explanations and tolerances are stripped by the server. */
   lesson: (api: ApiClient, slug: string) => api.get<LessonDetail>(`/learn/lessons/${slug}`),
+  /** Instant feedback for one answer while playing (stores nothing). */
+  check: (api: ApiClient, slug: string, index: number, answer: LessonAnswer) =>
+    api.post<AnswerCheck>(`/learn/lessons/${slug}/check`, { index, answer }),
   /** Grade a submission server-side. `answers` is one entry per exercise, in order. */
   submit: (api: ApiClient, slug: string, answers: LessonAnswer[]) =>
     api.post<LessonSubmitResult>(`/learn/lessons/${slug}/submit`, { answers }),

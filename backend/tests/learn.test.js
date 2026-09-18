@@ -476,3 +476,40 @@ describe("LearnService.deleteAllForUser", () => {
     assert.ok(await repo.findStats("userB"));
   });
 });
+
+// ---- LearnService.checkAnswer (instant feedback) ---------------------------------------
+
+describe("LearnService.checkAnswer", () => {
+  let service;
+  let repo;
+  const user = { _id: "user1", goal: "budgeting" };
+
+  beforeEach(() => {
+    repo = new FakeLearnRepository(buildFixture());
+    service = new LearnService(repo);
+  });
+
+  it("grades one answer and returns the correct answer + explanation", async () => {
+    const right = await service.checkAnswer(user, "l1", { index: 0, answer: 0 });
+    assert.deepEqual(right, { index: 0, isCorrect: true, correctAnswer: 0, explanation: "e1" });
+    const wrong = await service.checkAnswer(user, "l1", { index: 0, answer: 2 });
+    assert.equal(wrong.isCorrect, false);
+    assert.equal(wrong.correctAnswer, 0);
+  });
+
+  it("stores nothing — XP and progress only change on submit", async () => {
+    await service.checkAnswer(user, "l1", { index: 0, answer: 0 });
+    const { stats } = await service.getStats(user);
+    assert.equal(stats.xp, 0);
+    assert.equal(stats.lessonsDone, 0);
+    assert.equal((await repo.listProgressForUser(user._id)).length, 0);
+  });
+
+  it("rejects locked lessons, unknown lessons and bad indexes", async () => {
+    await assert.rejects(service.checkAnswer(user, "l2", { index: 0, answer: 0 }), { code: "FORBIDDEN" });
+    await assert.rejects(service.checkAnswer(user, "nope", { index: 0, answer: 0 }), { code: "NOT_FOUND" });
+    for (const index of [-1, 99, 1.5, "0", undefined]) {
+      await assert.rejects(service.checkAnswer(user, "l1", { index, answer: 0 }), { code: "VALIDATION_ERROR" });
+    }
+  });
+});

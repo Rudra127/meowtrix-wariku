@@ -64,3 +64,14 @@ export function useSubmitLesson(slug: string) {
     },
   });
 }
+
+/**
+ * POST /learn/lessons/:slug/check — grade one answer for instant feedback in the player.
+ * Doesn't touch caches: nothing is stored server-side until the lesson is submitted.
+ */
+export function useCheckAnswer(slug: string) {
+  const api = useApi();
+  return useMutation({
+    mutationFn: ({ index, answer }: { index: number; answer: LessonAnswer }) => learnApi.check(api, slug, index, answer),
+  });
+}

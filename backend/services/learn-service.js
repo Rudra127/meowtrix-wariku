@@ -354,6 +354,32 @@ export default class LearnService {
     };
   }
 
+  /**
+   * POST /learn/lessons/:slug/check — grades ONE answer for instant feedback in the player.
+   * Body: { index, answer }. Stores nothing; XP/progress only change on `submitLesson`, which
+   * re-grades every answer server-side. The client locks an answer once it has been checked.
+   */
+  async checkAnswer(user, slug, body = {}) {
+    if (!slug || typeof slug !== "string") throw new ValidationError("Missing lesson slug");
+    const { index, answer } = body;
+    const lesson = await this.repository.findLessonBySlug(slug);
+    if (!lesson) throw new NotFoundError("Lesson not found");
+    if (!Number.isInteger(index) || index < 0 || index >= lesson.exercises.length) {
+      throw new ValidationError(`\`index\` must be an integer between 0 and ${lesson.exercises.length - 1}`);
+    }
+    const status = await this._statusForLesson(user, lesson);
+    if (status === "locked") {
+      throw new ForbiddenError("Finish the lessons before this one to unlock it.");
+    }
+    const exercise = lesson.exercises[index];
+    return {
+      index,
+      isCorrect: gradeAnswer(exercise, answer),
+      correctAnswer: exercise.answer,
+      explanation: exercise.explanation ?? "",
+    };
+  }
+
   // -- private (underscore prefix; not enforced by the language) --------------------
 
   async _statusForLesson(user, lesson) {

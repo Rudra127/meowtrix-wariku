@@ -2,14 +2,17 @@ import { useUser } from '@clerk/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { LearnerStats } from '@/api/types';
 import { AppText, Avatar, Badge, Button, Card, PressableScale, ProgressBar, Screen, SectionHeader, Sheet } from '@/components/ui';
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { getErrorMessage } from '@/lib/errors';
 import { greeting } from '@/lib/format';
-import { colors, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing } from '@/theme';
+import { AchievementsRow } from './AchievementsRow';
+import { levelFromXp } from './gamification';
 import { LessonNode } from './LessonNode';
+import { StreakFlame } from './StreakFlame';
 import type { Lesson } from './sampleData';
 import { useLearningPath } from './useLearn';
 
@@ -33,7 +36,7 @@ export function LearnScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState<Lesson | null>(null);
   const [placementOpen, setPlacementOpen] = useState(false);
-  const { plan, level } = usePersonalization();
+  const { plan, level, isPersonalized } = usePersonalization();
   const path = useLearningPath();
 
   // Server has already reordered units by user.goal and computed done/current/locked.
@@ -45,6 +48,8 @@ export function LearnScreen() {
     ? currentUnit.lessons.filter((l) => l.status === 'done').length / currentUnit.lessons.length
     : 0;
   const name = user?.firstName || 'there';
+  const lvl = levelFromXp(stats.xp);
+  const goalDone = stats.todayXp >= stats.dailyGoalXp;
 
   const startLesson = (slug: string) => {
     setSelected(null);
@@ -54,7 +59,7 @@ export function LearnScreen() {
   let nodeIndex = 0;
 
   return (
-    <Screen tabBarSpace>
+    <Screen tabBarSpace refreshing={path.isRefetching} onRefresh={() => path.refetch()}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -66,7 +71,7 @@ export function LearnScreen() {
         </View>
         <View style={styles.stats}>
           <View style={styles.statChip}>
-            <Ionicons name="flame" size={16} color="#F97316" />
+            <StreakFlame active={stats.streakDays > 0} />
             <AppText variant="bodyStrong">{stats.streakDays}</AppText>
           </View>
           <View style={styles.statChip}>
@@ -76,13 +81,13 @@ export function LearnScreen() {
         </View>
       </View>
 
-      {/* Continue learning hero */}
+      {/* Continue learning hero (whole card is tappable) */}
       {current && currentUnit && (
-        <View style={styles.hero}>
+        <PressableScale onPress={() => startLesson(current.id)} scaleTo={0.985} style={styles.hero} accessibilityRole="button" accessibilityLabel={`Continue: ${current.title}`}>
           <View style={[styles.heroRing, { width: 220, height: 220, right: -70, top: -80 }]} />
           <View style={[styles.heroRing, { width: 140, height: 140, right: -20, top: -30 }]} />
           <AppText variant="label" color={colors.textOnPrimaryMuted}>
-            Continue learning · Unit {currentUnit.index}
+            {stats.lessonsDone === 0 ? 'Start here' : 'Continue learning'} · Unit {currentUnit.index}
           </AppText>
           <AppText variant="title" color={colors.textOnPrimary}>
             {current.title}
@@ -95,10 +100,30 @@ export function LearnScreen() {
             <AppText variant="caption" color={colors.textOnPrimaryMuted}>
               {Math.round(unitProgress * 100)}% of unit complete
             </AppText>
-            <Button title="Continue" variant="accent" size="sm" onPress={() => startLesson(current.id)} icon={<Ionicons name="play" size={14} color={colors.primary} />} />
+            <View style={styles.heroCta}>
+              <Ionicons name="play" size={14} color={colors.primary} />
+              <AppText variant="caption" color={colors.primary} style={styles.heroCtaText}>
+                {stats.lessonsDone === 0 ? 'Start' : 'Continue'}
+              </AppText>
+            </View>
           </View>
+        </PressableScale>
+      )}
+      {!current && units.length > 0 && (
+        <View style={styles.hero}>
+          <View style={[styles.heroRing, { width: 220, height: 220, right: -70, top: -80 }]} />
+          <View style={styles.doneMedal}>
+            <Ionicons name="trophy" size={26} color={colors.primary} />
+          </View>
+          <AppText variant="title" color={colors.textOnPrimary}>
+            Path complete!
+          </AppText>
+          <AppText variant="caption" color={colors.textOnPrimaryMuted}>
+            You’ve finished every lesson. Review any lesson below to sharpen your score — new units are on the way.
+          </AppText>
         </View>
       )}
+      {path.isPending && !path.data && <HeroSkeleton />}
 
       {/* Personalised plan strip */}
       <View style={styles.planStrip}>
@@ -116,47 +141,71 @@ export function LearnScreen() {
         </PressableScale>
       )}
 
-      {/* Daily goal + stats */}
+      {/* Daily goal + level */}
       <View style={styles.tiles}>
-        <Card style={styles.goalTile}>
+        <Card elevated style={[styles.goalTile, goalDone && styles.goalDone]}>
           <View style={styles.tileHead}>
-            <AppText variant="label">Daily goal</AppText>
-            <Ionicons name="trophy-outline" size={16} color={colors.textMuted} />
+            <AppText variant="label" color={goalDone ? colors.success : colors.textMuted}>
+              Daily goal
+            </AppText>
+            <Ionicons name={goalDone ? 'checkmark-circle' : 'trophy-outline'} size={18} color={goalDone ? colors.success : colors.textMuted} />
           </View>
           <AppText variant="heading">
             {stats.todayXp}
             <AppText variant="caption"> / {stats.dailyGoalXp} XP</AppText>
           </AppText>
-          <ProgressBar value={stats.dailyGoalXp > 0 ? stats.todayXp / stats.dailyGoalXp : 0} />
+          <ProgressBar value={stats.dailyGoalXp > 0 ? stats.todayXp / stats.dailyGoalXp : 0} color={goalDone ? colors.success : colors.primary} />
+          <AppText variant="caption" color={goalDone ? colors.success : colors.textMuted}>
+            {goalDone ? 'Goal reached — nice!' : `${stats.dailyGoalXp - stats.todayXp} XP to go today`}
+          </AppText>
         </Card>
-        <Card style={styles.smallTile}>
-          <AppText variant="label">Accuracy</AppText>
-          <AppText variant="heading">{Math.round(stats.accuracy * 100)}%</AppText>
-          <AppText variant="caption">{stats.lessonsDone} lessons</AppText>
+        <Card elevated style={styles.smallTile}>
+          <View style={styles.tileHead}>
+            <AppText variant="label">Level</AppText>
+            <View style={styles.lvlBadge}>
+              <AppText variant="caption" color={colors.accent} style={styles.lvlText}>
+                {lvl.level}
+              </AppText>
+            </View>
+          </View>
+          <AppText variant="bodyStrong" numberOfLines={1}>
+            {lvl.title}
+          </AppText>
+          <ProgressBar value={lvl.progress} color={colors.accent} />
+          <AppText variant="caption">{lvl.toNext} XP to next</AppText>
         </Card>
       </View>
 
-      {/* Loading + error states surface here so the rest of the UI stays intact. */}
-      {path.isPending && !path.data && (
-        <View style={styles.centerLine}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      )}
+      {/* Error + empty states — the rest of the screen stays usable. */}
       {path.isError && (
-        <Card tone="muted" style={styles.errorCard}>
-          <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} />
+        <Card elevated style={styles.stateCard}>
+          <View style={[styles.stateIcon, { backgroundColor: colors.dangerSoft }]}>
+            <Ionicons name="cloud-offline-outline" size={22} color={colors.danger} />
+          </View>
           <View style={styles.flex}>
-            <AppText variant="bodyStrong">Couldn&apos;t load lessons</AppText>
+            <AppText variant="bodyStrong">Couldn’t load lessons</AppText>
             <AppText variant="caption">{getErrorMessage(path.error)}</AppText>
           </View>
           <Button title="Retry" size="sm" variant="secondary" onPress={() => path.refetch()} />
         </Card>
       )}
+      {path.isSuccess && units.length === 0 && (
+        <Card elevated style={styles.stateCard}>
+          <View style={[styles.stateIcon, { backgroundColor: colors.accentSoft }]}>
+            <Ionicons name="book-outline" size={22} color={colors.primary} />
+          </View>
+          <View style={styles.flex}>
+            <AppText variant="bodyStrong">Lessons are on their way</AppText>
+            <AppText variant="caption">No lessons are published yet. Pull down to refresh.</AppText>
+          </View>
+        </Card>
+      )}
+      {path.isPending && !path.data && <PathSkeleton />}
 
       {/* Learning path */}
       {units.map((unit, unitIndex) => (
         <View key={unit.id} style={styles.unit}>
-          {unitIndex === 0 && <Badge tone="success" icon="sparkles" label="Recommended for your goal" />}
+          {unitIndex === 0 && isPersonalized && <Badge tone="success" icon="sparkles" label="Recommended for your goal" />}
           <View style={styles.unitHeader}>
             <View style={styles.unitIndex}>
               <AppText variant="bodyStrong" color={colors.accent}>
@@ -176,6 +225,8 @@ export function LearnScreen() {
         </View>
       ))}
 
+      {path.data && <AchievementsRow stats={stats} />}
+
       <LessonSheet lesson={selected} onClose={() => setSelected(null)} onStart={startLesson} />
       <Sheet visible={placementOpen} onClose={() => setPlacementOpen(false)} title="Placement check">
         <AppText variant="body" color={colors.textMuted}>
@@ -185,6 +236,27 @@ export function LearnScreen() {
         <Button title="Got it" variant="secondary" onPress={() => setPlacementOpen(false)} />
       </Sheet>
     </Screen>
+  );
+}
+
+/** Static placeholders shown while the path loads (feels faster than a spinner). */
+function HeroSkeleton() {
+  return (
+    <View style={[styles.hero, styles.skeletonHero]}>
+      <View style={[styles.skelLine, { width: '40%', backgroundColor: colors.primaryMuted }]} />
+      <View style={[styles.skelLine, { width: '75%', height: 24, backgroundColor: colors.primaryMuted }]} />
+      <View style={[styles.skelLine, { width: '100%', height: 10, marginTop: spacing.md, backgroundColor: colors.primaryMuted }]} />
+    </View>
+  );
+}
+
+function PathSkeleton() {
+  return (
+    <View style={styles.path}>
+      {[0, 56, 84, 56].map((x, i) => (
+        <View key={i} style={[styles.skelNode, { transform: [{ translateX: x }] }]} />
+      ))}
+    </View>
   );
 }
 
@@ -255,8 +327,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
   },
-  goalTile: { flex: 1.4 },
+  goalTile: { flex: 1.3, borderWidth: 1.5, borderColor: 'transparent' },
+  goalDone: { borderColor: colors.success, backgroundColor: colors.successSoft },
   smallTile: { flex: 1 },
+  lvlBadge: { minWidth: 24, height: 24, borderRadius: 12, paddingHorizontal: 6, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  lvlText: { fontFamily: fonts.extrabold, fontSize: 12, lineHeight: 16 },
   tileHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   unit: { gap: spacing.lg, marginTop: spacing.sm },
   unitHeader: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
@@ -271,6 +346,28 @@ const styles = StyleSheet.create({
   path: { alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.sm },
   sheetStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   lockedCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  centerLine: { alignItems: 'center', paddingVertical: spacing.lg },
-  errorCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  heroCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    height: 38,
+  },
+  heroCtaText: { fontFamily: fonts.bold, fontSize: 14 },
+  doneMedal: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  stateCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stateIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  skeletonHero: { gap: spacing.sm, minHeight: 160 },
+  skelLine: { height: 12, borderRadius: 6 },
+  skelNode: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surfaceMuted },
 });

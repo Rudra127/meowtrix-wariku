@@ -24,6 +24,12 @@ const learn = (app) => {
     sendSuccess(res, await service.getLesson(req.user, req.params.slug));
   });
 
+  // Instant feedback for one answer while playing. Body: { index, answer }.
+  // Returns { index, isCorrect, correctAnswer, explanation }. Stores nothing.
+  app.post("/api/v1/learn/lessons/:slug/check", protect, async (req, res) => {
+    sendSuccess(res, await service.checkAnswer(req.user, req.params.slug, req.body));
+  });
+
   // Grade a submission server-side. Body: { answers: unknown[] } — one per exercise, in order.
   // Returns per-exercise { isCorrect, correctAnswer, explanation }, awarded XP, refreshed stats.
   app.post("/api/v1/learn/lessons/:slug/submit", protect, async (req, res) => {

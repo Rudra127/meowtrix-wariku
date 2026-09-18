@@ -7,9 +7,9 @@ import { after, before, describe, it } from "node:test";
 import mongoose from "mongoose";
 import request from "supertest";
 import User from "../database/models/user.js";
-import { buildApp, signSessionToken, testSigningKey } from "./helpers.js";
+import { buildApp, signSessionToken, testMongoUri, testSigningKey } from "./helpers.js";
 
-const uri = process.env.TEST_MONGODB_URI;
+const uri = testMongoUri("core");
 
 describe("authenticated flow (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not set" }, () => {
   let app;

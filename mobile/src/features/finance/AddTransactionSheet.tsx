@@ -6,7 +6,7 @@ import type { CategoryId, TransactionType } from '@/api/types';
 import { AppText, Button, FormError, PressableScale, SegmentedControl, Sheet, TextField } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, spacing, themed } from '@/theme';
 import { categoryOptions, defaultCategory } from './categories';
 import { useCreateTransaction } from './useFinance';
 
@@ -78,6 +78,7 @@ export function AddTransactionSheet({ visible, onClose, currency, onSaved }: Pro
           {currencySymbol(currency).trim()}
         </AppText>
         <TextInput
+          keyboardAppearance={isDark() ? 'dark' : 'light'}
           value={amount}
           onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
           placeholder="0"
@@ -123,7 +124,7 @@ export function AddTransactionSheet({ visible, onClose, currency, onSaved }: Pro
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   symbol: { fontFamily: fonts.semibold, fontSize: 32, lineHeight: 40 },
   amountInput: { fontFamily: fonts.bold, fontSize: 44, color: colors.text, minWidth: 80, textAlign: 'center', paddingVertical: 0 },
@@ -139,4 +140,4 @@ const styles = StyleSheet.create({
   },
   chipActive: { backgroundColor: colors.primary },
   chipText: { fontFamily: fonts.semibold },
-});
+}));

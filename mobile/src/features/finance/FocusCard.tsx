@@ -4,7 +4,7 @@ import type { FinanceSummary } from '@/api/types';
 import { Amount, AppText, Badge, Card, ProgressBar, type IconName } from '@/components/ui';
 import type { MoneyFocus } from '@/features/onboarding/options';
 import { formatMoney } from '@/lib/format';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, themed } from '@/theme';
 import { categoryMeta } from './categories';
 
 type Props = { focus: MoneyFocus; summary: FinanceSummary | undefined; currency: string; hidden: boolean };
@@ -50,7 +50,7 @@ export function FocusCard({ focus, summary, currency, hidden }: Props) {
           <AppText variant="caption">
             spent of {formatMoney(limit, currency, { decimals: false })} · {summary.daysLeftInMonth} days left
           </AppText>
-          <ProgressBar value={Math.min(1, ratio)} color={ratio > 0.9 ? colors.danger : ratio > 0.75 ? colors.warning : colors.primary} />
+          <ProgressBar value={Math.min(1, ratio)} color={ratio > 0.9 ? colors.danger : ratio > 0.75 ? colors.warning : colors.brand} />
           <Tip
             text={
               remaining < 0
@@ -164,7 +164,7 @@ function Shell({
     <Card elevated style={styles.card}>
       <View style={styles.head}>
         <View style={styles.icon}>
-          <Ionicons name={icon} size={18} color={colors.primary} />
+          <Ionicons name={icon} size={18} color={colors.brand} />
         </View>
         <AppText variant="subheading" style={styles.flex}>
           {title}
@@ -179,7 +179,7 @@ function Shell({
 function Tip({ text }: { text: string }) {
   return (
     <View style={styles.tip}>
-      <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
+      <Ionicons name="sparkles-outline" size={14} color={colors.brand} />
       <AppText variant="caption" color={colors.text} style={styles.flex}>
         {text}
       </AppText>
@@ -187,7 +187,7 @@ function Tip({ text }: { text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   card: { gap: spacing.sm, padding: spacing.xl, borderWidth: 1.5, borderColor: colors.accent },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
@@ -201,4 +201,4 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginTop: spacing.xs,
   },
-});
+}));

@@ -4,7 +4,7 @@ import { ActivityIndicator, Animated, Pressable, StyleSheet, View } from 'react-
 import type { SeriesPeriod, SeriesPoint } from '@/api/types';
 import { Amount, AppText, Card, SegmentedControl } from '@/components/ui';
 import { formatCompact } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing, themed } from '@/theme';
 import { useFinanceSeries } from './useFinance';
 
 const PERIODS = [
@@ -28,7 +28,7 @@ export function SpendingChart({ currency, month }: { currency: string; month?: s
           <AppText variant="label">Spending this {period}</AppText>
           <Amount minor={data?.total ?? 0} currency={currency} size={26} />
         </View>
-        {isPending && <ActivityIndicator color={colors.primary} />}
+        {isPending && <ActivityIndicator color={colors.brand} />}
       </View>
 
       <SegmentedControl options={PERIODS} value={period} onChange={setPeriod} />
@@ -86,7 +86,7 @@ function Bars({ data, currency }: { data: SeriesPoint[]; currency: string }) {
             <View style={styles.valueSlot}>
               {active && d.value > 0 && (
                 <View style={styles.tip}>
-                  <AppText variant="caption" color={colors.textOnPrimary} style={styles.tipText} numberOfLines={1}>
+                  <AppText variant="caption" color={colors.onInk} style={styles.tipText} numberOfLines={1}>
                     {formatCompact(d.value, currency)}
                   </AppText>
                 </View>
@@ -98,7 +98,7 @@ function Bars({ data, currency }: { data: SeriesPoint[]; currency: string }) {
                   styles.bar,
                   {
                     height: h,
-                    backgroundColor: active ? colors.primary : d.value ? colors.mint : colors.surfaceMuted,
+                    backgroundColor: active ? colors.brand : d.value ? colors.mint : colors.surfaceMuted,
                     transform: [{ scaleY: anims[i] }],
                   },
                 ]}
@@ -114,7 +114,7 @@ function Bars({ data, currency }: { data: SeriesPoint[]; currency: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   card: { gap: spacing.lg, padding: spacing.xl },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   empty: { alignItems: 'center', justifyContent: 'center' },
@@ -126,4 +126,4 @@ const styles = StyleSheet.create({
   track: { width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
   bar: { width: '78%', maxWidth: 30, borderRadius: 8, transformOrigin: 'bottom' },
   activeLabel: { fontFamily: fonts.bold },
-});
+}));

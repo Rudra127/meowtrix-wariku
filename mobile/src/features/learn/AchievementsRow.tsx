@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import type { LearnerStats } from '@/api/types';
 import { AppText, Badge, Button, PressableScale, SectionHeader, Sheet } from '@/components/ui';
-import { colors, fonts, spacing } from '@/theme';
+import { colors, fonts, spacing, themed } from '@/theme';
 import { getAchievements, type Achievement } from './gamification';
 
 /** Horizontal shelf of medals. Unlocked = coloured, locked = grey with a lock. Tap for details. */
@@ -53,7 +53,7 @@ export function AchievementsRow({ stats }: { stats: LearnerStats }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   wrap: { gap: spacing.md },
   row: { gap: spacing.md, paddingRight: spacing.xl },
   item: { width: 72, alignItems: 'center', gap: spacing.xs },
@@ -72,4 +72,4 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.semibold, fontSize: 12 },
   bigMedal: { alignSelf: 'center', width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   center: { alignItems: 'center' },
-});
+}));

@@ -8,7 +8,7 @@ import { Confetti, CountUp } from '@/components/fx';
 import { Reveal } from '@/components/motion';
 import { AppText, Badge, Button, Card, PressableScale, ProgressBar } from '@/components/ui';
 import { levelFromXp, newlyUnlocked } from '../gamification';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing, themed } from '@/theme';
 import { formatAnswer } from './exerciseMeta';
 
 type Props = {
@@ -60,7 +60,7 @@ export function ResultsView({ result, exercises, answers, lessonTitle, bestCombo
               { opacity: pop, transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] },
             ]}
           >
-            <Ionicons name={passed ? 'trophy' : 'refresh'} size={34} color={passed ? colors.primary : colors.textOnPrimary} />
+            <Ionicons name={passed ? 'trophy' : 'refresh'} size={34} color={passed ? colors.textOnAccent : colors.textOnPrimary} />
           </Animated.View>
           <AppText variant="label" color={colors.textOnPrimaryMuted}>
             {lessonTitle}
@@ -140,7 +140,7 @@ export function ResultsView({ result, exercises, answers, lessonTitle, bestCombo
               {Math.min(stats.todayXp, stats.dailyGoalXp)} / {stats.dailyGoalXp} XP
             </AppText>
           </View>
-          <ProgressBar value={goalRatio} color={goalRatio >= 1 ? colors.success : colors.primary} />
+          <ProgressBar value={goalRatio} color={goalRatio >= 1 ? colors.success : colors.brand} />
           {goalRatio >= 1 && (
             <AppText variant="caption" color={colors.success}>
               Goal reached for today — nice work.
@@ -225,7 +225,7 @@ function ReviewItem({ n, result, exercise, answer }: { n: number; result: Exerci
       )}
       {!!result.explanation && (
         <View style={styles.explain}>
-          <Ionicons name="bulb-outline" size={15} color={colors.primary} />
+          <Ionicons name="bulb-outline" size={15} color={colors.brand} />
           <AppText variant="caption" color={colors.text} style={styles.flex}>
             {result.explanation}
           </AppText>
@@ -248,7 +248,7 @@ function AnswerRow({ label, value, tone }: { label: string; value: string; tone:
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   bold: { fontFamily: fonts.bold },
@@ -294,4 +294,4 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   footer: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.sm, gap: spacing.xs },
-});
+}));

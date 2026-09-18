@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import type { ColorValue } from 'react-native';
 import { FloatingTabBar } from '@/components/navigation/FloatingTabBar';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { colors } from '@/theme';
+import { colors, useTheme } from '@/theme';
 
 export const unstable_settings = { initialRouteName: 'index' };
 
@@ -15,6 +15,7 @@ function icon(outline: IconName, filled: IconName) {
 }
 
 export default function TabsLayout() {
+  useTheme(); // re-render on light/dark switch
   // First authenticated call: verifies the Clerk session with our backend and creates the
   // user's Mongo record on first sign-in. Screens read the cached result via useCurrentUser().
   useCurrentUser();

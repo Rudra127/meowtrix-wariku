@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 import { AppText, PressableScale, type IconName } from '@/components/ui';
-import { colors, radius, shadow, spacing } from '@/theme';
+import { colors, radius, shadow, spacing, themed } from '@/theme';
 
 type Props = { icon: IconName; label: string; description: string; selected: boolean; onPress: () => void };
 
@@ -16,7 +16,7 @@ export function OptionCard({ icon, label, description, selected, onPress }: Prop
       style={[styles.card, shadow.card, selected && styles.selected]}
     >
       <View style={[styles.icon, selected && styles.iconSelected]}>
-        <Ionicons name={icon} size={22} color={selected ? colors.accent : colors.primary} />
+        <Ionicons name={icon} size={22} color={selected ? colors.accent : colors.brand} />
       </View>
       <View style={styles.text}>
         <AppText variant="bodyStrong">{label}</AppText>
@@ -29,7 +29,7 @@ export function OptionCard({ icon, label, description, selected, onPress }: Prop
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
-  selected: { borderColor: colors.primary, backgroundColor: colors.accentSoft },
+  selected: { borderColor: colors.brand, backgroundColor: colors.accentSoft },
   icon: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   iconSelected: { backgroundColor: colors.primary },
   text: { flex: 1, gap: 2 },
@@ -53,5 +53,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-});
+  radioSelected: { backgroundColor: colors.primary, borderColor: colors.brand },
+}));

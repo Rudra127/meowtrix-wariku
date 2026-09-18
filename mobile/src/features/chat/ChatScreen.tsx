@@ -11,13 +11,14 @@ import { DATA_SUGGESTIONS, HOLDINGS_SUGGESTION } from '@/features/onboarding/opt
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useKeyboardInset } from '@/hooks/useKeyboardVisible';
 import { getErrorMessage } from '@/lib/errors';
-import { colors, fonts, radius, shadow, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, shadow, spacing, themed, useTheme } from '@/theme';
 import { AiOrb } from './AiOrb';
 import { MessageContent } from './MessageContent';
 import { TypingDots } from './TypingDots';
 import { describeTools, useChat } from './useChat';
 
 export function ChatScreen() {
+  useTheme(); // re-render on light/dark switch
   const { messages, send, retry, reset, toolsUsed, isSending, error } = useChat();
   const groundedIn = describeTools(toolsUsed);
   const { plan, level } = usePersonalization();
@@ -127,12 +128,13 @@ export function ChatScreen() {
       <View style={[styles.composerWrap, { paddingBottom: composerBottom }]}>
         <View style={[styles.composer, shadow.card]}>
           <TextInput
+            keyboardAppearance={isDark() ? 'dark' : 'light'}
             style={styles.input}
             value={input}
             onChangeText={setInput}
             placeholder="Ask about budgets, saving, investing…"
             placeholderTextColor={colors.textSubtle}
-            selectionColor={colors.primary}
+            selectionColor={colors.brand}
             multiline
             maxLength={4000}
           />
@@ -144,7 +146,7 @@ export function ChatScreen() {
             accessibilityLabel="Send"
             style={[styles.send, canSend ? styles.sendActive : styles.sendIdle]}
           >
-            <Ionicons name="arrow-up" size={20} color={canSend ? colors.primary : colors.textSubtle} />
+            <Ionicons name="arrow-up" size={20} color={canSend ? colors.textOnAccent : colors.textSubtle} />
           </PressableScale>
         </View>
         <AppText variant="caption" center color={colors.textSubtle} style={styles.disclaimer}>
@@ -176,7 +178,7 @@ function EmptyState({ onPick, suggestions }: { onPick: (text: string) => void; s
           <Reveal key={s.text} index={3 + i} style={styles.suggestionWrap}>
             <PressableScale onPress={() => onPick(s.text)} style={[styles.suggestion, shadow.card]}>
               <View style={styles.suggestionIcon}>
-                <Ionicons name={s.icon} size={18} color={colors.primary} />
+                <Ionicons name={s.icon} size={18} color={colors.brand} />
               </View>
               <AppText variant="caption" color={colors.text} style={styles.suggestionText}>
                 {s.text}
@@ -193,7 +195,7 @@ function Bubble({ message }: { message: ChatMessage }) {
   if (message.role === 'user') {
     return (
       <View style={styles.userBubble}>
-        <AppText variant="body" color={colors.textOnPrimary}>
+        <AppText variant="body" color={colors.onInk}>
           {message.content}
         </AppText>
       </View>
@@ -209,7 +211,7 @@ function Bubble({ message }: { message: ChatMessage }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   gradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 360, pointerEvents: 'none' },
   header: {
@@ -295,4 +297,4 @@ const styles = StyleSheet.create({
   sendActive: { backgroundColor: colors.accent },
   sendIdle: { backgroundColor: colors.surfaceMuted },
   disclaimer: { marginTop: spacing.xs, fontSize: 11 },
-});
+}));

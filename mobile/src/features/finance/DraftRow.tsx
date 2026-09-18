@@ -4,7 +4,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import type { CategoryId, TransactionType } from '@/api/types';
 import { AppText, Badge, IconButton, PressableScale } from '@/components/ui';
 import { currencySymbol } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, spacing, themed } from '@/theme';
 import { categoryMeta, categoryOptions, defaultCategory } from './categories';
 import type { EditableDraft } from './useVoiceCapture';
 import { relativeDate } from './dates';
@@ -54,7 +54,7 @@ export function DraftRow({ draft, currency, onToggle, onChange, onRemove }: Prop
           accessibilityLabel={`${draft.selected ? 'Exclude' : 'Include'} ${draft.title || meta.label}`}
           style={[styles.check, draft.selected && styles.checkOn]}
         >
-          {draft.selected && <Ionicons name="checkmark" size={16} color={colors.primary} />}
+          {draft.selected && <Ionicons name="checkmark" size={16} color={colors.brand} />}
         </PressableScale>
 
         <View style={[styles.icon, { backgroundColor: meta.soft }]}>
@@ -63,6 +63,7 @@ export function DraftRow({ draft, currency, onToggle, onChange, onRemove }: Prop
 
         <View style={styles.flex}>
           <TextInput
+            keyboardAppearance={isDark() ? 'dark' : 'light'}
             value={draft.title}
             onChangeText={(title) => onChange({ title })}
             placeholder={meta.label}
@@ -97,6 +98,7 @@ export function DraftRow({ draft, currency, onToggle, onChange, onRemove }: Prop
               {currencySymbol(currency).trim()}
             </AppText>
             <TextInput
+              keyboardAppearance={isDark() ? 'dark' : 'light'}
               value={amountText}
               onChangeText={(t) => setAmountText(t.replace(/[^0-9.]/g, ''))}
               onBlur={commitAmount}
@@ -153,7 +155,7 @@ export function DraftRow({ draft, currency, onToggle, onChange, onRemove }: Prop
             accessibilityRole="button"
             accessibilityLabel="Done editing"
           >
-            <AppText variant="caption" color={colors.primary} style={styles.chipText}>
+            <AppText variant="caption" color={colors.brand} style={styles.chipText}>
               Done
             </AppText>
           </PressableScale>
@@ -163,7 +165,7 @@ export function DraftRow({ draft, currency, onToggle, onChange, onRemove }: Prop
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   wrap: {
     borderRadius: radius.md,
@@ -222,4 +224,4 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary },
   chipText: { fontFamily: fonts.semibold },
   done: { alignSelf: 'center', paddingVertical: spacing.xs, paddingHorizontal: spacing.lg },
-});
+}));

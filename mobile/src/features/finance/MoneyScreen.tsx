@@ -17,7 +17,7 @@ import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/format';
-import { colors, radius, spacing, TAB_BAR_CLEARANCE } from '@/theme';
+import { colors, radius, spacing, TAB_BAR_CLEARANCE, themed, useTheme } from '@/theme';
 import { AddTransactionSheet } from './AddTransactionSheet';
 import { BalanceCard, type BalanceAction } from './BalanceCard';
 import { BudgetsSheet } from './BudgetsSheet';
@@ -33,6 +33,7 @@ import { VoiceCaptureSheet } from './VoiceCaptureSheet';
 type OpenSheet = 'voice' | 'add' | 'budgets' | 'goals' | null;
 
 export function MoneyScreen() {
+  useTheme(); // re-render on light/dark switch
   const currency = useCurrentUser().data?.currency ?? 'INR';
   const { plan } = usePersonalization();
   const insets = useSafeAreaInsets();
@@ -73,7 +74,7 @@ export function MoneyScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
         <Reveal>
           <View style={styles.header}>
@@ -207,7 +208,7 @@ export function MoneyScreen() {
                   <View key={goal.id} style={styles.budget}>
                     <View style={styles.budgetHead}>
                       <View style={[styles.catIcon, { backgroundColor: colors.accentSoft }]}>
-                        <Ionicons name="flag" size={16} color={colors.primary} />
+                        <Ionicons name="flag" size={16} color={colors.brand} />
                       </View>
                       <AppText variant="bodyStrong" style={styles.flex}>
                         {goal.name}
@@ -217,7 +218,7 @@ export function MoneyScreen() {
                         {formatMoney(goal.targetAmount, currency, { decimals: false })}
                       </AppText>
                     </View>
-                    <ProgressBar value={Math.min(1, goal.ratio)} color={goal.achieved ? colors.success : colors.primary} />
+                    <ProgressBar value={Math.min(1, goal.ratio)} color={goal.achieved ? colors.success : colors.brand} />
                   </View>
                 ))}
               </Card>
@@ -330,7 +331,7 @@ function EmptyCard({
   return (
     <Card elevated style={styles.emptyCard}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={24} color={colors.primary} />
+        <Ionicons name={icon} size={24} color={colors.brand} />
       </View>
       <AppText variant="bodyStrong">{title}</AppText>
       <AppText variant="caption" center>
@@ -365,7 +366,7 @@ function MoneySkeleton({ top }: { top: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   skelHero: { backgroundColor: colors.primary, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },
   skelActions: { flexDirection: 'row', justifyContent: 'space-between' },
   skelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
@@ -404,4 +405,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   errorCard: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl },
-});
+}));

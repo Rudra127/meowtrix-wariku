@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Alert, StyleSheet, View } from 'react-native';
 import type { BrokerProvider, IntegrationStatus } from '@/api/types';
 import { AppText, Badge, Button, Card } from '@/components/ui';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, themed } from '@/theme';
 import { useBrokerage } from './useBrokerage';
 
 /** Per-provider description shown under the title. */
@@ -45,7 +45,7 @@ export function BrokerageCard({ status, onMessage }: { status: IntegrationStatus
     <Card elevated style={styles.card}>
       <View style={styles.head}>
         <View style={styles.logo}>
-          <Ionicons name="trending-up" size={20} color={colors.primary} />
+          <Ionicons name="trending-up" size={20} color={colors.brand} />
         </View>
         <View style={styles.flex}>
           <AppText variant="bodyStrong">{status.label}</AppText>
@@ -103,7 +103,7 @@ export function BrokerageCard({ status, onMessage }: { status: IntegrationStatus
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   card: { gap: spacing.md, padding: spacing.lg },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -115,4 +115,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 import { AppText, PressableScale, type IconName } from '@/components/ui';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, themed } from '@/theme';
 
 type Props = {
   icon: IconName;
@@ -17,7 +17,7 @@ export function SettingsRow({ icon, label, value, right, onPress, tone = 'defaul
   const content = (
     <>
       <View style={[styles.icon, danger && styles.iconDanger]}>
-        <Ionicons name={icon} size={18} color={danger ? colors.danger : colors.primary} />
+        <Ionicons name={icon} size={18} color={danger ? colors.danger : colors.brand} />
       </View>
       <AppText variant="bodyStrong" color={danger ? colors.danger : colors.text} style={styles.label}>
         {label}
@@ -39,10 +39,10 @@ export function SettingsRow({ icon, label, value, right, onPress, tone = 'defaul
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   icon: { width: 38, height: 38, borderRadius: radius.sm, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
   iconDanger: { backgroundColor: colors.dangerSoft },
   label: { flex: 1 },
   right: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-});
+}));

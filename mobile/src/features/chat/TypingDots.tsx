@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
-import { colors } from '@/theme';
+import { colors, themed } from '@/theme';
 
 export function TypingDots() {
   const [dots] = useState(() => [0, 1, 2].map(() => new Animated.Value(0)));
@@ -38,7 +38,7 @@ export function TypingDots() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', gap: 5, paddingVertical: 6 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.primary },
-});
+}));

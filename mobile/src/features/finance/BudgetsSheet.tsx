@@ -5,7 +5,7 @@ import type { ExpenseCategory } from '@/api/types';
 import { AppText, Badge, Button, FormError, IconButton, PressableScale, ProgressBar, Sheet } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errors';
 import { currencySymbol, formatMoney } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, spacing, themed } from '@/theme';
 import { EXPENSE_OPTIONS, categoryMeta } from './categories';
 import { useBudgets, useDeleteBudget, useSetBudget } from './useFinance';
 
@@ -42,7 +42,7 @@ export function BudgetsSheet({ visible, onClose, currency, month }: Props) {
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Budgets" scroll>
-      {isPending && <ActivityIndicator color={colors.primary} />}
+      {isPending && <ActivityIndicator color={colors.brand} />}
       {isError && <FormError message={getErrorMessage(error)} />}
 
       {!isPending && budgets.length === 0 && !adding && (
@@ -88,6 +88,7 @@ export function BudgetsSheet({ visible, onClose, currency, month }: Props) {
               {currencySymbol(currency).trim()}
             </AppText>
             <TextInput
+              keyboardAppearance={isDark() ? 'dark' : 'light'}
               value={limit}
               onChangeText={(t) => setLimit(t.replace(/[^0-9.]/g, ''))}
               placeholder="0"
@@ -137,7 +138,7 @@ export function BudgetsSheet({ visible, onClose, currency, month }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   row: { gap: spacing.sm },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -158,4 +159,4 @@ const styles = StyleSheet.create({
   },
   chipActive: { backgroundColor: colors.primary },
   chipText: { fontFamily: fonts.semibold },
-});
+}));

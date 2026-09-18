@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui';
-import { colors, fonts, radius, shadow, spacing } from '@/theme';
+import { colors, fonts, radius, shadow, spacing, themed } from '@/theme';
 import type { Lesson } from './sampleData';
 
 type Props = { lesson: Lesson; offset: number; onPress: (lesson: Lesson) => void };
@@ -45,7 +45,7 @@ export function LessonNode({ lesson, offset, onPress }: Props) {
     lesson.status === 'done'
       ? { bg: colors.primary, fg: colors.accent, rim: colors.primaryPressed }
       : lesson.status === 'current'
-        ? { bg: colors.accent, fg: colors.primary, rim: '#A7D24A' }
+        ? { bg: colors.accent, fg: colors.textOnAccent, rim: '#A7D24A' }
         : { bg: colors.surfaceMuted, fg: colors.textSubtle, rim: colors.border };
 
   const icon = lesson.status === 'done' ? 'checkmark' : lesson.status === 'locked' ? 'lock-closed' : lesson.icon;
@@ -55,7 +55,7 @@ export function LessonNode({ lesson, offset, onPress }: Props) {
     <View style={[styles.wrap, { transform: [{ translateX: offset }] }]}>
       {isCurrent && (
         <View style={[styles.tooltip, shadow.card]}>
-          <AppText variant="label" color={colors.primary} style={styles.tooltipText}>
+          <AppText variant="label" color={colors.brand} style={styles.tooltipText}>
             Start
           </AppText>
           <View style={styles.tooltipArrow} />
@@ -94,7 +94,7 @@ export function LessonNode({ lesson, offset, onPress }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   wrap: { alignItems: 'center', width: 140, gap: spacing.sm },
   rim: { position: 'absolute', top: 6, width: SIZE, height: SIZE, borderRadius: SIZE / 2 },
   face: { width: SIZE, height: SIZE, borderRadius: SIZE / 2, alignItems: 'center', justifyContent: 'center' },
@@ -117,4 +117,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     transform: [{ rotate: '45deg' }],
   },
-});
+}));

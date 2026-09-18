@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Animated, Dimensions, Easing, StyleSheet, View } from 'react-native';
-import { colors } from '@/theme';
+import { colors, themed } from '@/theme';
 
-const PALETTE = [colors.accent, colors.primary, '#F97316', '#3B6FD8', '#E5484D', '#7A5AF8', '#FFFFFF'];
+const palette = () => [colors.accent, colors.primary, '#F97316', '#3B6FD8', '#E5484D', '#7A5AF8', '#FFFFFF'];
 
 type Piece = { x: number; delay: number; drift: number; spin: number; size: number; color: string; round: boolean };
 
@@ -16,7 +16,7 @@ export function Confetti({ count = 40, duration = 2600 }: { count?: number; dura
       drift: (Math.random() - 0.5) * 160,
       spin: (Math.random() - 0.5) * 900,
       size: 6 + Math.random() * 7,
-      color: PALETTE[i % PALETTE.length],
+      color: palette()[i % 7],
       round: Math.random() > 0.6,
     })),
   );
@@ -62,6 +62,6 @@ export function Confetti({ count = 40, duration = 2600 }: { count?: number; dura
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   layer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', zIndex: 50 },
-});
+}));

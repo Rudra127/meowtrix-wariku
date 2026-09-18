@@ -21,7 +21,7 @@ import type { AnswerCheck, LessonAnswer } from '@/api/types';
 import { AppText, Badge, Button, Card, FormError, IconButton, ProgressBar, Sheet } from '@/components/ui';
 import { KEYBOARD_BEHAVIOR } from '@/hooks/useKeyboardVisible';
 import { getErrorMessage } from '@/lib/errors';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing, themed, useTheme } from '@/theme';
 import { nudge, praise } from './gamification';
 import { ComboChip } from './player/ComboChip';
 import { EXERCISE_META, fillMissing, formatAnswer, isAnswered } from './player/exerciseMeta';
@@ -34,6 +34,7 @@ type Props = { slug: string };
 const QUESTION_COUNT = 4;
 
 export function PracticePlayerScreen({ slug }: Props) {
+  useTheme(); // re-render on light/dark switch
   const router = useRouter();
   const generate = useGeneratePractice(slug);
   const check = useCheckPracticeAnswer();
@@ -137,7 +138,7 @@ export function PracticePlayerScreen({ slug }: Props) {
         <TopBar progress={0} onClose={router.back} />
         <View style={styles.center}>
           <View style={styles.sparkle}>
-            <Ionicons name="sparkles" size={30} color={colors.primary} />
+            <Ionicons name="sparkles" size={30} color={colors.brand} />
           </View>
           <AppText variant="heading" center>
             Writing fresh questions…
@@ -145,7 +146,7 @@ export function PracticePlayerScreen({ slug }: Props) {
           <AppText variant="body" center color={colors.textMuted}>
             Our AI coach is putting together a few new questions on this topic. This takes a few seconds.
           </AppText>
-          <ActivityIndicator color={colors.primary} style={styles.spinner} />
+          <ActivityIndicator color={colors.brand} style={styles.spinner} />
         </View>
       </Shell>
     );
@@ -187,7 +188,7 @@ export function PracticePlayerScreen({ slug }: Props) {
             <View style={[styles.ring, { width: 260, height: 260, top: -110, right: -90 }]} />
             <View style={[styles.ring, { width: 160, height: 160, top: -40, right: -30 }]} />
             <View style={styles.medal}>
-              <Ionicons name={perfect ? 'sparkles' : 'school'} size={30} color={colors.primary} />
+              <Ionicons name={perfect ? 'sparkles' : 'school'} size={30} color={colors.brand} />
             </View>
             <AppText variant="label" color={colors.textOnPrimaryMuted}>
               AI practice · {round.lesson.title}
@@ -234,7 +235,7 @@ export function PracticePlayerScreen({ slug }: Props) {
                 )}
                 {!!r.explanation && (
                   <View style={styles.explain}>
-                    <Ionicons name="bulb-outline" size={15} color={colors.primary} />
+                    <Ionicons name="bulb-outline" size={15} color={colors.brand} />
                     <AppText variant="caption" color={colors.text} style={styles.flex}>
                       {r.explanation}
                     </AppText>
@@ -333,9 +334,10 @@ export function PracticePlayerScreen({ slug }: Props) {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
+  const { isDark } = useTheme();
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {children}
     </SafeAreaView>
   );
@@ -345,7 +347,7 @@ function TopBar({ progress, onClose, counter, combo = 0 }: { progress: number; o
   return (
     <View style={styles.topBar}>
       <IconButton icon="close" tone="surface" size={40} onPress={onClose} accessibilityLabel="Close practice" />
-      <ProgressBar value={Math.max(0, Math.min(1, progress))} height={10} color={combo >= 3 ? colors.success : colors.primary} style={styles.flex} />
+      <ProgressBar value={Math.max(0, Math.min(1, progress))} height={10} color={combo >= 3 ? colors.success : colors.brand} style={styles.flex} />
       <ComboChip combo={combo} />
       {counter ? (
         <View style={styles.counter}>
@@ -371,7 +373,7 @@ function AnswerRow({ label, value, tone }: { label: string; value: string; tone:
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   bold: { fontFamily: fonts.bold },
@@ -400,4 +402,4 @@ const styles = StyleSheet.create({
   answerRow: { flexDirection: 'row', gap: spacing.sm },
   answerLabel: { width: 88 },
   explain: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', backgroundColor: colors.accentSoft, borderRadius: radius.sm, padding: spacing.md },
-});
+}));

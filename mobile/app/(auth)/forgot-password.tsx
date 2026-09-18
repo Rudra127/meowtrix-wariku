@@ -8,10 +8,12 @@ import { useState } from 'react';
 import { Button, CodeInput, FormError, TextField } from '@/components/ui';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { getBannerMessage, getErrorMessage } from '@/lib/errors';
+import { useTheme } from '@/theme';
 
 type Step = 'email' | 'reset';
 
 export default function ForgotPasswordScreen() {
+  useTheme(); // re-render on light/dark switch
   const router = useRouter();
   const { signIn, errors, fetchStatus } = useSignIn();
   const [step, setStep] = useState<Step>('email');

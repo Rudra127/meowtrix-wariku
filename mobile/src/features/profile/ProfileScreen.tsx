@@ -8,7 +8,7 @@ import { usersApi } from '@/api/endpoints';
 import { queryKeys } from '@/api/queryClient';
 import type { Goal, Level, User } from '@/api/types';
 import { useApi } from '@/api/useApi';
-import { AppText, Avatar, Badge, Button, Card, FormError, PressableScale, Screen, SectionHeader, Sheet } from '@/components/ui';
+import { AppText, Avatar, Badge, Button, Card, FormError, PressableScale, Screen, SectionHeader, Sheet, type IconName } from '@/components/ui';
 import { Reveal } from '@/components/motion';
 import { API_URL } from '@/config/env';
 import { useBrokerages } from '@/features/finance/useFinance';
@@ -21,8 +21,15 @@ import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getErrorMessage } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, themed, useTheme } from '@/theme';
+import type { ThemePreference } from '@/theme/ThemeProvider';
 import { SettingsRow } from './SettingsRow';
+
+const APPEARANCE: { value: ThemePreference; label: string; description: string; icon: IconName }[] = [
+  { value: 'system', label: 'System', description: 'Match your phone’s setting', icon: 'phone-portrait-outline' },
+  { value: 'light', label: 'Light', description: 'Bright, warm canvas', icon: 'sunny-outline' },
+  { value: 'dark', label: 'Dark', description: 'Easy on the eyes at night', icon: 'moon-outline' },
+];
 
 const CURRENCIES = [
   { code: 'INR', name: 'Indian Rupee' },
@@ -32,6 +39,7 @@ const CURRENCIES = [
 ];
 
 export function ProfileScreen() {
+  const theme = useTheme(); // re-render on light/dark switch; also drives Appearance
   const { user } = useUser(); // identity, straight from Clerk
   const { signOut } = useClerk();
   const { userId } = useAuth();
@@ -42,6 +50,7 @@ export function ProfileScreen() {
   /** Transient confirmation from the Zerodha connect flow ("Zerodha connected."). */
   const [notice, setNotice] = useState<string | null>(null);
   const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [notifications, setNotifications] = useState(true); // placeholder until push is wired
   const [editing, setEditing] = useState<'level' | 'goal' | null>(null);
   const { level, plan } = usePersonalization();
@@ -146,6 +155,12 @@ export function ProfileScreen() {
         <Card elevated style={styles.list}>
           <SettingsRow icon="cash-outline" label="Currency" value={`${currency} ${currencySymbol(currency).trim()}`} onPress={() => setCurrencyOpen(true)} />
           <SettingsRow
+            icon={theme.isDark ? 'moon-outline' : 'sunny-outline'}
+            label="Appearance"
+            value={APPEARANCE.find((a) => a.value === theme.preference)?.label}
+            onPress={() => setAppearanceOpen(true)}
+          />
+          <SettingsRow
             icon="notifications-outline"
             label="Notifications"
             right={
@@ -177,7 +192,7 @@ export function ProfileScreen() {
             onPress={() => backendUser.refetch()}
             right={
               backendUser.isPending || backendUser.isFetching ? (
-                <ActivityIndicator color={colors.primary} />
+                <ActivityIndicator color={colors.brand} />
               ) : backendUser.isError ? (
                 <Badge tone="danger" icon="close-circle" label="Offline" />
               ) : (
@@ -217,7 +232,7 @@ export function ProfileScreen() {
                 onPress={() => updatePlan.mutate({ goal: o.value })}
               />
             ))}
-          {updatePlan.isPending && <ActivityIndicator color={colors.primary} />}
+          {updatePlan.isPending && <ActivityIndicator color={colors.brand} />}
         </View>
       </Sheet>
 
@@ -235,7 +250,7 @@ export function ProfileScreen() {
                 accessibilityState={{ selected: active }}
               >
                 <View style={[styles.currencySymbol, active && styles.currencySymbolActive]}>
-                  <AppText variant="bodyStrong" color={active ? colors.primary : colors.text}>
+                  <AppText variant="bodyStrong" color={active ? colors.textOnAccent : colors.text}>
                     {currencySymbol(c.code).trim()}
                   </AppText>
                 </View>
@@ -244,10 +259,36 @@ export function ProfileScreen() {
                   <AppText variant="caption">{c.name}</AppText>
                 </View>
                 {updateCurrency.isPending && updateCurrency.variables === c.code ? (
-                  <ActivityIndicator color={colors.primary} />
+                  <ActivityIndicator color={colors.brand} />
                 ) : (
-                  active && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+                  active && <Ionicons name="checkmark-circle" size={22} color={colors.brand} />
                 )}
+              </PressableScale>
+            );
+          })}
+        </View>
+      </Sheet>
+
+      <Sheet visible={appearanceOpen} onClose={() => setAppearanceOpen(false)} title="Appearance">
+        <View style={styles.currencyList}>
+          {APPEARANCE.map((a) => {
+            const active = a.value === theme.preference;
+            return (
+              <PressableScale
+                key={a.value}
+                onPress={() => theme.setPreference(a.value)}
+                style={[styles.currency, active && styles.currencyActive]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+              >
+                <View style={[styles.currencySymbol, active && styles.currencySymbolActive]}>
+                  <Ionicons name={a.icon} size={20} color={active ? colors.textOnAccent : colors.text} />
+                </View>
+                <View style={styles.flex}>
+                  <AppText variant="bodyStrong">{a.label}</AppText>
+                  <AppText variant="caption">{a.description}</AppText>
+                </View>
+                {active && <Ionicons name="checkmark-circle" size={22} color={colors.brand} />}
               </PressableScale>
             );
           })}
@@ -273,7 +314,7 @@ function HeroStat({ icon, value, label }: { icon: React.ComponentProps<typeof Io
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   // Reveal wrappers group a header with its card; keep the screen's rhythm inside them.
   section: { gap: spacing.lg },
   flex: { flex: 1 },
@@ -300,7 +341,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
   },
-  currencyActive: { borderColor: colors.primary, backgroundColor: colors.accentSoft },
+  currencyActive: { borderColor: colors.brand, backgroundColor: colors.accentSoft },
   currencySymbol: {
     width: 40,
     height: 40,
@@ -310,4 +351,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   currencySymbolActive: { backgroundColor: colors.accent },
-});
+}));

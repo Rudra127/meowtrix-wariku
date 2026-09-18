@@ -12,11 +12,12 @@ import { AppText, Button, CodeInput, FormError, TextField } from '@/components/u
 import { AuthLayout, OrDivider } from '@/features/auth/AuthLayout';
 import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton';
 import { getBannerMessage, getErrorMessage } from '@/lib/errors';
-import { colors, fonts, spacing } from '@/theme';
+import { colors, fonts, spacing, themed, useTheme } from '@/theme';
 
 type Step = 'credentials' | 'email-code';
 
 export default function SignInScreen() {
+  useTheme(); // re-render on light/dark switch
   const { signIn, errors, fetchStatus } = useSignIn();
   const [step, setStep] = useState<Step>('credentials');
   const [email, setEmail] = useState('');
@@ -142,9 +143,9 @@ export default function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  forgot: { alignSelf: 'flex-end', color: colors.primary, fontFamily: fonts.bold, fontSize: 14, marginTop: -spacing.xs },
-  link: { color: colors.primary, fontFamily: fonts.bold, fontSize: 15 },
+const styles = themed(() => StyleSheet.create({
+  forgot: { alignSelf: 'flex-end', color: colors.brand, fontFamily: fonts.bold, fontSize: 14, marginTop: -spacing.xs },
+  link: { color: colors.brand, fontFamily: fonts.bold, fontSize: 15 },
   footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.sm },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
-});
+}));

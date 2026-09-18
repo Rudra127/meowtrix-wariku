@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import type { AnswerCheck, LessonAnswer, PublicExercise } from '@/api/types';
 import { AppText, PressableScale } from '@/components/ui';
-import { colors, fonts, radius, shadow, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, shadow, spacing, themed } from '@/theme';
 import { shuffleIndices } from './exerciseMeta';
 
 type Props = {
@@ -43,13 +43,13 @@ export function ExerciseInput({ exercise, value, onChange, onSubmit, feedback }:
   }
 }
 
-const TONE_STYLE: Record<Tone, { border: string; bg: string; key: string; keyText: string }> = {
+const TONE_STYLE: Record<Tone, { border: string; bg: string; key: string; keyText: string }> = themed(() => ({
   idle: { border: colors.border, bg: colors.surface, key: colors.surfaceMuted, keyText: colors.textMuted },
   selected: { border: colors.primary, bg: colors.accentSoft, key: colors.primary, keyText: colors.accent },
   correct: { border: colors.success, bg: colors.successSoft, key: colors.success, keyText: colors.textOnPrimary },
   wrong: { border: colors.danger, bg: colors.dangerSoft, key: colors.danger, keyText: colors.textOnPrimary },
   dim: { border: colors.border, bg: colors.surface, key: colors.surfaceMuted, keyText: colors.textSubtle },
-};
+}));
 
 function MultipleChoice({ options, value, onChange, feedback }: { options: string[]; value: LessonAnswer; onChange: (v: LessonAnswer) => void; feedback?: AnswerCheck | null }) {
   return (
@@ -81,7 +81,7 @@ function MultipleChoice({ options, value, onChange, feedback }: { options: strin
             <AppText variant="body" style={styles.flex}>
               {label}
             </AppText>
-            {tone === 'selected' && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
+            {tone === 'selected' && <Ionicons name="checkmark-circle" size={22} color={colors.brand} />}
           </PressableScale>
         );
       })}
@@ -142,6 +142,7 @@ function FillNumber({ value, onChange, onSubmit, feedback }: { value: LessonAnsw
         ]}
       >
         <TextInput
+          keyboardAppearance={isDark() ? 'dark' : 'light'}
           editable={!feedback}
           value={raw}
           onChangeText={(text) => {
@@ -157,7 +158,7 @@ function FillNumber({ value, onChange, onSubmit, feedback }: { value: LessonAnsw
           returnKeyType="done"
           placeholder="0"
           placeholderTextColor={colors.textSubtle}
-          selectionColor={colors.primary}
+          selectionColor={colors.brand}
           style={styles.fillInput}
           autoFocus
           accessibilityLabel="Your answer"
@@ -188,7 +189,7 @@ function OrderSteps({ options, value, onChange, feedback }: { options: string[];
         </AppText>
         {picked.length > 0 && !feedback && (
           <PressableScale onPress={() => onChange([])} haptic={false} accessibilityRole="button">
-            <AppText variant="caption" color={colors.primary} style={styles.bold}>
+            <AppText variant="caption" color={colors.brand} style={styles.bold}>
               Reset
             </AppText>
           </PressableScale>
@@ -230,7 +231,7 @@ function OrderSteps({ options, value, onChange, feedback }: { options: string[];
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   bold: { fontFamily: fonts.bold },
   list: { gap: spacing.md },
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     paddingVertical: spacing.lg,
   },
-  fillFocused: { borderColor: colors.primary },
+  fillFocused: { borderColor: colors.brand },
   fillInput: { fontFamily: fonts.bold, fontSize: 40, color: colors.text, textAlign: 'center', paddingVertical: 0, outlineWidth: 0 },
   hint: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2 },
-});
+}));

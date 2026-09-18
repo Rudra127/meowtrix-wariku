@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import type { AnswerCheck, PublicExercise } from '@/api/types';
 import { AppText, Button } from '@/components/ui';
-import { colors, motion, radius, spacing } from '@/theme';
+import { colors, motion, radius, spacing, themed } from '@/theme';
 import { formatAnswer } from './exerciseMeta';
 
 type Props = {
@@ -70,7 +70,7 @@ export function FeedbackPanel({ check, exercise, title, isLast, loading, onConti
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   panel: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
@@ -80,4 +80,4 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   icon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-});
+}));

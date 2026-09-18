@@ -120,6 +120,17 @@ Import from `src` with the `@/` alias (`import { Button } from '@/components/ui'
 - Google uses `useSSO()` from `@clerk/expo` (browser-based OAuth, works in Expo Go).
 - Dashboard setup and troubleshooting: [`docs/AUTH.md`](../docs/AUTH.md).
 
+## Dark mode
+
+- Palettes: `src/theme/palettes.ts` (light + dark, same keys). `colors` from '@/theme' is LIVE — the
+  active palette is swapped in place by `ThemeProvider` (app/_layout.tsx). Preference (System / Light /
+  Dark) lives in Profile → Appearance and is saved on-device.
+- Module-level styles must be wrapped: `const styles = themed(() => StyleSheet.create({...}))` — same for
+  any module-level object built from `colors` (variant/tone maps). Values read inside render are fine.
+- Every screen/route component calls `useTheme()` so a theme switch re-renders it.
+- `colors.primary` is a SURFACE colour (hero cards, tab bar). For brand-green icons/text/borders use
+  `colors.brand`; on lime (`accent`) backgrounds use `colors.textOnAccent`; on `ink` pills use `colors.onInk`.
+
 ## Motion (keep it subtle, Apple-like)
 
 Tokens live in `src/theme/motion.ts` — never hand-tune springs in a screen.

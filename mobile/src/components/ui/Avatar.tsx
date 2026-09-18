@@ -1,5 +1,5 @@
 import { Image, StyleSheet, View } from 'react-native';
-import { colors, fonts } from '@/theme';
+import { colors, fonts, themed } from '@/theme';
 import { AppText } from './AppText';
 
 type Props = { name?: string | null; imageUrl?: string | null; size?: number; tone?: 'accent' | 'primary' };
@@ -27,4 +27,4 @@ export function Avatar({ name, imageUrl, size = 44, tone = 'accent' }: Props) {
   );
 }
 
-const styles = StyleSheet.create({ base: { alignItems: 'center', justifyContent: 'center' } });
+const styles = themed(() => StyleSheet.create({ base: { alignItems: 'center', justifyContent: 'center' } }));

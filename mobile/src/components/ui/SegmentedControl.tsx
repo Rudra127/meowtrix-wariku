@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
-import { colors, fonts, radius, shadow } from '@/theme';
+import { colors, fonts, radius, shadow, themed } from '@/theme';
 import { AppText } from './AppText';
 
 type Props<T extends string> = {
@@ -51,9 +51,9 @@ export function SegmentedControl<T extends string>({ options, value, onChange }:
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   track: { flexDirection: 'row', backgroundColor: colors.surfaceMuted, borderRadius: radius.pill, padding: PAD },
   thumb: { position: 'absolute', top: PAD, bottom: PAD, left: PAD, borderRadius: radius.pill, backgroundColor: colors.surface },
   item: { flex: 1, height: 36, alignItems: 'center', justifyContent: 'center' },
   activeText: { fontFamily: fonts.bold },
-});
+}));

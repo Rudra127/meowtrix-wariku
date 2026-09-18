@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import type { Transaction } from '@/api/types';
 import { AppText, PressableScale } from '@/components/ui';
 import { formatMoney } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing, themed } from '@/theme';
 import { SOURCE_LABELS, categoryMeta, signedAmount } from './categories';
 import { relativeDate } from './dates';
 
@@ -53,10 +53,10 @@ export function TransactionRow({ tx, currency, onPress }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   icon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   amount: { fontFamily: fonts.bold },
-});
+}));

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { forwardRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, spacing, themed } from '@/theme';
 import { AppText } from './AppText';
 import type { IconName } from './IconButton';
 
@@ -22,11 +22,12 @@ export const TextField = forwardRef<TextInput, Props>(function TextField(
         {label}
       </AppText>
       <View style={[styles.field, focused && styles.focused, !!error && styles.errored]}>
-        {icon && <Ionicons name={icon} size={18} color={focused ? colors.primary : colors.textMuted} />}
+        {icon && <Ionicons name={icon} size={18} color={focused ? colors.brand : colors.textMuted} />}
         <TextInput
+          keyboardAppearance={isDark() ? 'dark' : 'light'}
           ref={ref}
           placeholderTextColor={colors.textSubtle}
-          selectionColor={colors.primary}
+          selectionColor={colors.brand}
           style={[styles.input, style]}
           accessibilityLabel={label}
           secureTextEntry={isPassword && hidden}
@@ -60,7 +61,7 @@ export const TextField = forwardRef<TextInput, Props>(function TextField(
   );
 });
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { gap: spacing.xs + 2 },
   label: { fontFamily: fonts.semibold },
   field: {
@@ -74,7 +75,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
-  focused: { backgroundColor: colors.surface, borderColor: colors.primary },
+  focused: { backgroundColor: colors.surface, borderColor: colors.brand },
   errored: { borderColor: colors.danger },
   input: { flex: 1, fontFamily: fonts.medium, fontSize: 16, color: colors.text, paddingVertical: spacing.md },
-});
+}));

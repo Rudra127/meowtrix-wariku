@@ -11,11 +11,12 @@ import { AppText, Button, CodeInput, FormError, TextField } from '@/components/u
 import { AuthLayout, OrDivider } from '@/features/auth/AuthLayout';
 import { GoogleSignInButton } from '@/features/auth/GoogleSignInButton';
 import { getBannerMessage, getErrorMessage } from '@/lib/errors';
-import { colors, fonts, spacing } from '@/theme';
+import { colors, fonts, spacing, themed, useTheme } from '@/theme';
 
 type Step = 'details' | 'verify-email';
 
 export default function SignUpScreen() {
+  useTheme(); // re-render on light/dark switch
   const { signUp, errors, fetchStatus } = useSignUp();
   const [step, setStep] = useState<Step>('details');
   const [firstName, setFirstName] = useState('');
@@ -136,7 +137,7 @@ export default function SignUpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  link: { color: colors.primary, fontFamily: fonts.bold, fontSize: 15 },
+const styles = themed(() => StyleSheet.create({
+  link: { color: colors.brand, fontFamily: fonts.bold, fontSize: 15 },
   footer: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.sm },
-});
+}));

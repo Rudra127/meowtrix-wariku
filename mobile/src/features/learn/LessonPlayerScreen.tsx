@@ -20,7 +20,7 @@ import type { AnswerCheck, LessonAnswer } from '@/api/types';
 import { AppText, Badge, Button, FormError, IconButton, ProgressBar, Sheet } from '@/components/ui';
 import { KEYBOARD_BEHAVIOR } from '@/hooks/useKeyboardVisible';
 import { getErrorMessage } from '@/lib/errors';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing, themed, useTheme } from '@/theme';
 import { nudge, praise } from './gamification';
 import { ComboChip } from './player/ComboChip';
 import { EXERCISE_META, fillMissing, isAnswered } from './player/exerciseMeta';
@@ -32,6 +32,7 @@ import { useCheckAnswer, useLearningPath, useLessonDetail, useSubmitLesson } fro
 type Props = { slug: string };
 
 export function LessonPlayerScreen({ slug }: Props) {
+  useTheme(); // re-render on light/dark switch
   const router = useRouter();
   const detail = useLessonDetail(slug);
   const submit = useSubmitLesson(slug);
@@ -133,7 +134,7 @@ export function LessonPlayerScreen({ slug }: Props) {
       <Shell>
         <TopBar progress={0} onClose={router.back} />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.brand} />
           <AppText variant="caption">Loading lesson…</AppText>
         </View>
       </Shell>
@@ -246,9 +247,10 @@ export function LessonPlayerScreen({ slug }: Props) {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
+  const { isDark } = useTheme();
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {children}
     </SafeAreaView>
   );
@@ -258,7 +260,7 @@ function TopBar({ progress, onClose, counter, combo = 0 }: { progress: number; o
   return (
     <View style={styles.topBar}>
       <IconButton icon="close" tone="surface" size={40} onPress={onClose} accessibilityLabel="Close lesson" />
-      <ProgressBar value={progress} height={10} color={combo >= 3 ? colors.success : colors.primary} style={styles.flex} />
+      <ProgressBar value={progress} height={10} color={combo >= 3 ? colors.success : colors.brand} style={styles.flex} />
       <ComboChip combo={combo} />
       {counter ? (
         <View style={styles.counter}>
@@ -271,7 +273,7 @@ function TopBar({ progress, onClose, counter, combo = 0 }: { progress: number; o
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   bold: { fontFamily: fonts.bold },
@@ -285,4 +287,4 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, paddingHorizontal: spacing.xxl },
   errorIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center' },
   errorActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
-});
+}));

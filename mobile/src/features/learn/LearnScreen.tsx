@@ -8,7 +8,7 @@ import { AppText, Avatar, Badge, Button, Card, PressableScale, ProgressBar, Scre
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { getErrorMessage } from '@/lib/errors';
 import { greeting } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing, themed, useTheme } from '@/theme';
 import { Reveal, Skeleton } from '@/components/motion';
 import { AchievementsRow } from './AchievementsRow';
 import { levelFromXp } from './gamification';
@@ -33,6 +33,7 @@ const EMPTY_STATS: LearnerStats = {
 };
 
 export function LearnScreen() {
+  useTheme(); // re-render on light/dark switch
   const { user } = useUser();
   const router = useRouter();
   const [selected, setSelected] = useState<Lesson | null>(null);
@@ -82,7 +83,7 @@ export function LearnScreen() {
               <AppText variant="bodyStrong">{stats.streakDays}</AppText>
             </View>
             <View style={styles.statChip}>
-              <Ionicons name="flash" size={16} color={colors.primary} />
+              <Ionicons name="flash" size={16} color={colors.brand} />
               <AppText variant="bodyStrong">{stats.xp}</AppText>
             </View>
           </View>
@@ -111,8 +112,8 @@ export function LearnScreen() {
                 {Math.round(unitProgress * 100)}% of unit complete
               </AppText>
               <View style={styles.heroCta}>
-                <Ionicons name="play" size={14} color={colors.primary} />
-                <AppText variant="caption" color={colors.primary} style={styles.heroCtaText}>
+                <Ionicons name="play" size={14} color={colors.textOnAccent} />
+                <AppText variant="caption" color={colors.textOnAccent} style={styles.heroCtaText}>
                   {stats.lessonsDone === 0 ? 'Start' : 'Continue'}
                 </AppText>
               </View>
@@ -125,7 +126,7 @@ export function LearnScreen() {
           <View style={styles.hero}>
             <View style={[styles.heroRing, { width: 220, height: 220, right: -70, top: -80 }]} />
             <View style={styles.doneMedal}>
-              <Ionicons name="trophy" size={26} color={colors.primary} />
+              <Ionicons name="trophy" size={26} color={colors.textOnAccent} />
             </View>
             <AppText variant="title" color={colors.textOnPrimary}>
               Path complete!
@@ -149,7 +150,7 @@ export function LearnScreen() {
       {level.value !== 'beginner' && (
         <Reveal index={3}>
           <PressableScale onPress={() => setPlacementOpen(true)} style={styles.placement}>
-            <Ionicons name="flash-outline" size={18} color={colors.primary} />
+            <Ionicons name="flash-outline" size={18} color={colors.brand} />
             <AppText variant="caption" color={colors.text} style={styles.flex}>
               Know the basics already? Take a 2-minute placement check to skip ahead.
             </AppText>
@@ -172,7 +173,7 @@ export function LearnScreen() {
               {stats.todayXp}
               <AppText variant="caption"> / {stats.dailyGoalXp} XP</AppText>
             </AppText>
-            <ProgressBar value={stats.dailyGoalXp > 0 ? stats.todayXp / stats.dailyGoalXp : 0} color={goalDone ? colors.success : colors.primary} />
+            <ProgressBar value={stats.dailyGoalXp > 0 ? stats.todayXp / stats.dailyGoalXp : 0} color={goalDone ? colors.success : colors.brand} />
             <AppText variant="caption" color={goalDone ? colors.success : colors.textMuted}>
               {goalDone ? 'Goal reached — nice!' : `${stats.dailyGoalXp - stats.todayXp} XP to go today`}
             </AppText>
@@ -211,7 +212,7 @@ export function LearnScreen() {
       {path.isSuccess && units.length === 0 && (
         <Card elevated style={styles.stateCard}>
           <View style={[styles.stateIcon, { backgroundColor: colors.accentSoft }]}>
-            <Ionicons name="book-outline" size={22} color={colors.primary} />
+            <Ionicons name="book-outline" size={22} color={colors.brand} />
           </View>
           <View style={styles.flex}>
             <AppText variant="bodyStrong">Lessons are on their way</AppText>
@@ -340,7 +341,7 @@ function LessonSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -415,4 +416,4 @@ const styles = StyleSheet.create({
   stateCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   stateIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   skeletonHero: { gap: spacing.sm, minHeight: 160 },
-});
+}));

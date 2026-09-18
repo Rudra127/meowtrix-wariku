@@ -17,7 +17,7 @@ import { AppText, Badge, Button, FormError, IconButton, Screen } from '@/compone
 import { Reveal } from '@/components/motion';
 import { BrandMark } from '@/features/auth/BrandMark';
 import { getErrorMessage } from '@/lib/errors';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, themed, useTheme } from '@/theme';
 import { GOAL_OPTIONS, LEVEL_OPTIONS, goalPlan, levelOption } from './options';
 import { OptionCard } from './OptionCard';
 
@@ -33,6 +33,7 @@ const deviceTimezone = () => {
 };
 
 export function OnboardingScreen() {
+  useTheme(); // re-render on light/dark switch
   const api = useApi();
   const queryClient = useQueryClient();
   const { userId } = useAuth();
@@ -114,7 +115,7 @@ export function OnboardingScreen() {
                 <Reveal key={p.text} index={i} delay={200}>
                   <View style={styles.point}>
                     <View style={styles.pointIcon}>
-                      <Ionicons name={p.icon} size={16} color={colors.primary} />
+                      <Ionicons name={p.icon} size={16} color={colors.brand} />
                     </View>
                     <AppText variant="bodyStrong">{p.text}</AppText>
                   </View>
@@ -207,7 +208,7 @@ function PlanSummary({ level, goal, loading, error, onStart }: { level: Level; g
           {plan.planPoints.map((p) => (
             <View key={p} style={styles.planPoint}>
               <View style={styles.check}>
-                <Ionicons name="checkmark" size={14} color={colors.primary} />
+                <Ionicons name="checkmark" size={14} color={colors.textOnAccent} />
               </View>
               <AppText variant="body" color={colors.textOnPrimary} style={styles.flex}>
                 {p}
@@ -226,7 +227,7 @@ function PlanSummary({ level, goal, loading, error, onStart }: { level: Level; g
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   content: { flexGrow: 1 },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -254,4 +255,4 @@ const styles = StyleSheet.create({
   planPoints: { gap: spacing.md },
   planPoint: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   check: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-});
+}));

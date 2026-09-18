@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
-import { colors } from '@/theme';
+import { colors, themed } from '@/theme';
 
 /** Gradient "AI" orb. `pulse` adds a soft breathing halo (empty state). */
 export function AiOrb({ size = 32, pulse = false }: { size?: number; pulse?: boolean }) {
@@ -47,4 +47,4 @@ export function AiOrb({ size = 32, pulse = false }: { size?: number; pulse?: boo
   );
 }
 
-const styles = StyleSheet.create({ halo: { position: 'absolute', backgroundColor: colors.accent } });
+const styles = themed(() => StyleSheet.create({ halo: { position: 'absolute', backgroundColor: colors.accent } }));

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import { AppText } from '@/components/ui';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, spacing, themed } from '@/theme';
 
 /** "🔥 x3" chip that pops each time the in-lesson combo grows. Hidden below 2. */
 export function ComboChip({ combo }: { combo: number }) {
@@ -30,15 +30,15 @@ export function ComboChip({ combo }: { combo: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#FFF1E6',
+    backgroundColor: isDark() ? 'rgba(249,115,22,0.16)' : '#FFF1E6',
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
   },
   text: { fontFamily: fonts.extrabold },
-});
+}));

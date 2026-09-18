@@ -2,7 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { KEYBOARD_BEHAVIOR } from '@/hooks/useKeyboardVisible';
-import { colors, spacing, TAB_BAR_CLEARANCE } from '@/theme';
+import { colors, spacing, TAB_BAR_CLEARANCE, themed, useTheme } from '@/theme';
 
 type Props = {
   children: React.ReactNode;
@@ -20,10 +20,11 @@ type Props = {
 
 /** Standard screen container: canvas color, safe area, keyboard avoidance, padding. */
 export function Screen({ children, scroll = true, edges = ['top'], tabBarSpace, background, contentStyle, refreshing, onRefresh }: Props) {
+  const { isDark } = useTheme(); // re-render on light/dark switch
   const bottom = tabBarSpace ? { paddingBottom: TAB_BAR_CLEARANCE } : null;
   return (
     <View style={styles.root}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {background}
       <SafeAreaView style={styles.flex} edges={edges}>
         <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_BEHAVIOR}>
@@ -34,7 +35,7 @@ export function Screen({ children, scroll = true, edges = ['top'], tabBarSpace, 
               showsVerticalScrollIndicator={false}
               refreshControl={
                 onRefresh ? (
-                  <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+                  <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.brand} colors={[colors.brand]} />
                 ) : undefined
               }
             >
@@ -49,8 +50,8 @@ export function Screen({ children, scroll = true, edges = ['top'], tabBarSpace, 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   content: { flexGrow: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.xxl, gap: spacing.lg },
-});
+}));

@@ -1,19 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing, themed } from '@/theme';
 import { AppText } from './AppText';
 import type { IconName } from './IconButton';
 
 type Tone = 'neutral' | 'accent' | 'success' | 'danger' | 'warning' | 'glass';
 
-const TONES: Record<Tone, { bg: string; fg: string }> = {
+const TONES: Record<Tone, { bg: string; fg: string }> = themed(() => ({
   neutral: { bg: colors.surfaceMuted, fg: colors.textMuted },
   accent: { bg: colors.accent, fg: colors.textOnAccent },
   success: { bg: colors.successSoft, fg: colors.success },
   danger: { bg: colors.dangerSoft, fg: colors.danger },
   warning: { bg: colors.warningSoft, fg: colors.warning },
   glass: { bg: 'rgba(255,255,255,0.14)', fg: colors.textOnPrimary },
-};
+}));
 
 export function Badge({ label, tone = 'neutral', icon, style }: { label: string; tone?: Tone; icon?: IconName; style?: StyleProp<ViewStyle> }) {
   const t = TONES[tone];
@@ -27,7 +27,7 @@ export function Badge({ label, tone = 'neutral', icon, style }: { label: string;
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   base: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -38,4 +38,4 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   text: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
-});
+}));

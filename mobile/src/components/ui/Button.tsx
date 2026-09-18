@@ -1,5 +1,5 @@
 import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, themed } from '@/theme';
 import { AppText } from './AppText';
 import { PressableScale } from './PressableScale';
 
@@ -18,14 +18,14 @@ type Props = {
   containerStyle?: StyleProp<ViewStyle>;
 };
 
-const VARIANTS: Record<Variant, { bg: string; fg: string; border: string }> = {
-  primary: { bg: colors.ink, fg: colors.textOnPrimary, border: colors.ink },
+const VARIANTS: Record<Variant, { bg: string; fg: string; border: string }> = themed(() => ({
+  primary: { bg: colors.ink, fg: colors.onInk, border: colors.ink },
   brand: { bg: colors.primary, fg: colors.textOnPrimary, border: colors.primary },
   accent: { bg: colors.accent, fg: colors.textOnAccent, border: colors.accent },
   secondary: { bg: colors.surface, fg: colors.text, border: colors.border },
-  ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent' },
+  ghost: { bg: 'transparent', fg: colors.brand, border: 'transparent' },
   danger: { bg: colors.dangerSoft, fg: colors.danger, border: colors.dangerSoft },
-};
+}));
 
 /** Pill button. `primary` = black CTA, `brand` = green, `accent` = lime (use on dark surfaces). */
 export function Button({ title, onPress, variant = 'primary', size = 'md', loading, disabled, icon, style, containerStyle }: Props) {
@@ -61,11 +61,11 @@ export function Button({ title, onPress, variant = 'primary', size = 'md', loadi
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   base: { borderRadius: radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   md: { minHeight: 54, paddingHorizontal: spacing.xl },
   sm: { minHeight: 38, paddingHorizontal: spacing.lg },
   smText: { fontSize: 13 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   disabled: { opacity: 0.45 },
-});
+}));

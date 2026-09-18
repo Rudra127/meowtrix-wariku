@@ -3,40 +3,12 @@
  *
  * Visual language: warm off-white canvas, white cards, deep forest-green hero surfaces,
  * lime accent, black pill CTAs, big numbers with muted decimals, floating pill tab bar.
- * Light theme only for now; add a dark palette here when needed.
+ * Light + dark palettes live in ./palettes.ts; the active one is swapped at runtime (./runtime.ts).
  */
-export const colors = {
-  // Surfaces
-  background: '#F3F4EF', // app canvas
-  surface: '#FFFFFF', // cards
-  surfaceMuted: '#ECEEE7', // inputs, chips, tiles on white
-  border: '#E3E6DE',
+import { colors, themed } from './runtime';
 
-  // Brand
-  primary: '#0F3B2E', // deep forest green — hero cards, tab bar
-  primaryPressed: '#0A2C22',
-  primaryMuted: '#1E5241', // secondary elements on primary surfaces
-  accent: '#C8F169', // lime — highlights, active states on dark
-  accentSoft: '#EDF9D0',
-  mint: '#DCEFE5', // gradient tops, soft fills
-  ink: '#0B0D0C', // black pill buttons
-
-  // Text
-  text: '#101413',
-  textMuted: '#6C736E',
-  textSubtle: '#A3A9A4',
-  textOnPrimary: '#FFFFFF',
-  textOnPrimaryMuted: 'rgba(255,255,255,0.62)',
-  textOnAccent: '#0F3B2E',
-
-  // Feedback
-  success: '#2E9D62',
-  successSoft: '#E3F5EA',
-  danger: '#E5484D',
-  dangerSoft: '#FDECEC',
-  warning: '#E09A1B',
-  warningSoft: '#FDF3E1',
-} as const;
+export { colors, themed, applyScheme, currentScheme, isDark } from './runtime';
+export type { ColorScheme, Palette } from './palettes';
 
 export const spacing = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28, xxxl: 40 } as const;
 
@@ -51,7 +23,7 @@ export const fonts = {
   extrabold: 'Manrope_800ExtraBold',
 } as const;
 
-export const typography = {
+export const typography = themed(() => ({
   display: { fontFamily: fonts.bold, fontSize: 38, lineHeight: 44, letterSpacing: -1.2, color: colors.text },
   title: { fontFamily: fonts.bold, fontSize: 28, lineHeight: 34, letterSpacing: -0.6, color: colors.text },
   heading: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26, letterSpacing: -0.3, color: colors.text },
@@ -68,17 +40,18 @@ export const typography = {
     textTransform: 'uppercase' as const,
     color: colors.textMuted,
   },
-} as const;
+}));
 
 export type TypographyVariant = keyof typeof typography;
 
 /** CSS-style shadows (supported on iOS/Android with the New Architecture, and on web). */
-export const shadow = {
-  card: { boxShadow: '0px 6px 16px rgba(15, 59, 46, 0.06)' },
-  floating: { boxShadow: '0px 10px 24px rgba(0, 0, 0, 0.18)' },
-} as const;
+export const shadow = themed(() => ({
+  card: { boxShadow: `0px 6px 16px ${colors.shadowCard}` },
+  floating: { boxShadow: `0px 10px 24px ${colors.shadowFloating}` },
+}));
 
 /** Space to leave at the bottom of tab screens so content clears the floating tab bar. */
 export const TAB_BAR_CLEARANCE = 110;
 
 export { motion } from './motion';
+export { ThemeProvider, useTheme } from './ThemeProvider';

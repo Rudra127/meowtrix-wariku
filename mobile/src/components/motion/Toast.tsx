@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import type { IconName } from '@/components/ui/IconButton';
-import { colors, motion, radius, shadow, spacing } from '@/theme';
+import { colors, isDark, motion, radius, shadow, spacing, themed } from '@/theme';
 
 type Props = { message: string | null; icon?: IconName; bottom?: number };
 
@@ -46,15 +46,15 @@ export function Toast({ message, icon = 'checkmark-circle', bottom = 110 }: Prop
         },
       ]}
     >
-      <Ionicons name={icon} size={18} color={colors.accent} />
-      <AppText variant="caption" color={colors.textOnPrimary}>
+      <Ionicons name={icon} size={18} color={isDark() ? colors.success : colors.accent} />
+      <AppText variant="caption" color={colors.onInk}>
         {shown}
       </AppText>
     </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   toast: {
     position: 'absolute',
     alignSelf: 'center',
@@ -67,4 +67,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     pointerEvents: 'none',
   },
-});
+}));

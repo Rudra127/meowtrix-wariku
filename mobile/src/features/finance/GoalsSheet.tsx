@@ -4,7 +4,7 @@ import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
 import { AppText, Badge, Button, FormError, IconButton, ProgressBar, Sheet, TextField } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errors';
 import { currencySymbol, formatMoney } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, spacing, themed } from '@/theme';
 import { useContributeToGoal, useCreateGoal, useDeleteGoal, useGoals } from './useFinance';
 
 type Props = { visible: boolean; onClose: () => void; currency: string };
@@ -55,7 +55,7 @@ export function GoalsSheet({ visible, onClose, currency }: Props) {
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Savings goals" scroll>
-      {isPending && <ActivityIndicator color={colors.primary} />}
+      {isPending && <ActivityIndicator color={colors.brand} />}
       {isError && <FormError message={getErrorMessage(error)} />}
 
       {!isPending && goals.length === 0 && !adding && (
@@ -68,7 +68,7 @@ export function GoalsSheet({ visible, onClose, currency }: Props) {
         <View key={goal.id} style={styles.goal}>
           <View style={styles.goalHead}>
             <View style={[styles.icon, goal.achieved && styles.iconDone]}>
-              <Ionicons name={goal.achieved ? 'checkmark' : 'flag'} size={16} color={goal.achieved ? colors.success : colors.primary} />
+              <Ionicons name={goal.achieved ? 'checkmark' : 'flag'} size={16} color={goal.achieved ? colors.success : colors.brand} />
             </View>
             <View style={styles.flex}>
               <AppText variant="bodyStrong">{goal.name}</AppText>
@@ -87,7 +87,7 @@ export function GoalsSheet({ visible, onClose, currency }: Props) {
             />
           </View>
 
-          <ProgressBar value={Math.min(1, goal.ratio)} color={goal.achieved ? colors.success : colors.primary} />
+          <ProgressBar value={Math.min(1, goal.ratio)} color={goal.achieved ? colors.success : colors.brand} />
 
           {contributing?.id === goal.id ? (
             <View style={styles.contributeRow}>
@@ -96,6 +96,7 @@ export function GoalsSheet({ visible, onClose, currency }: Props) {
                   {currencySymbol(currency).trim()}
                 </AppText>
                 <TextInput
+                  keyboardAppearance={isDark() ? 'dark' : 'light'}
                   value={contributing.amount}
                   onChangeText={(t) => setContributing({ id: goal.id, amount: t.replace(/[^0-9.]/g, '') })}
                   placeholder="0"
@@ -130,6 +131,7 @@ export function GoalsSheet({ visible, onClose, currency }: Props) {
               {currencySymbol(currency).trim()}
             </AppText>
             <TextInput
+              keyboardAppearance={isDark() ? 'dark' : 'light'}
               value={target}
               onChangeText={(t) => setTarget(t.replace(/[^0-9.]/g, ''))}
               placeholder="0"
@@ -155,7 +157,7 @@ export function GoalsSheet({ visible, onClose, currency }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   goal: { gap: spacing.sm, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   goalHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -185,4 +187,4 @@ const styles = StyleSheet.create({
   amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   symbol: { fontFamily: fonts.semibold, fontSize: 26, lineHeight: 34 },
   amountInput: { fontFamily: fonts.bold, fontSize: 36, color: colors.text, minWidth: 70, textAlign: 'center', paddingVertical: 0 },
-});
+}));

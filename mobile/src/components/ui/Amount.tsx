@@ -1,7 +1,7 @@
 import { StyleSheet, Text } from 'react-native';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { moneyParts } from '@/lib/format';
-import { colors, fonts } from '@/theme';
+import { colors, fonts, themed } from '@/theme';
 
 type Props = {
   /** Integer minor units (paise/cents). */
@@ -34,7 +34,7 @@ export function Amount({ minor, currency = 'INR', size = 36, color = colors.text
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   text: { fontFamily: fonts.bold },
   symbol: { fontFamily: fonts.semibold },
-});
+}));

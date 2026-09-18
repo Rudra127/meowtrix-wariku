@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, themed } from '@/theme';
 import { AppText } from './AppText';
 
 /** Form-level (non-field) error banner. Renders nothing when `message` is empty. */
@@ -16,7 +16,7 @@ export function FormError({ message }: { message?: string | null }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   box: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -26,4 +26,4 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   text: { flex: 1 },
-});
+}));

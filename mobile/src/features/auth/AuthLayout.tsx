@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Reveal } from '@/components/motion';
 import { AppText, Badge, IconButton } from '@/components/ui';
 import { KEYBOARD_BEHAVIOR } from '@/hooks/useKeyboardVisible';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, themed } from '@/theme';
 import { BrandMark } from './BrandMark';
 
 type Props = {
@@ -90,7 +90,7 @@ export function OrDivider({ label = 'or' }: { label?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary },
   flex: { flex: 1 },
   scroll: { flexGrow: 1 },
@@ -118,4 +118,4 @@ const styles = StyleSheet.create({
   form: { gap: spacing.lg },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   line: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.textSubtle },
-});
+}));

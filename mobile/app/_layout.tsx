@@ -27,7 +27,7 @@ import { queryClient } from '@/api/queryClient';
 import { CLERK_PUBLISHABLE_KEY } from '@/config/env';
 import { BrandMark } from '@/features/auth/BrandMark';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { colors, spacing } from '@/theme';
+import { colors, spacing, themed, ThemeProvider, useTheme } from '@/theme';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -44,13 +44,17 @@ export default function RootLayout() {
     // tokenCache = expo-secure-store: keeps users signed in across app restarts (encrypted).
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
       <QueryClientProvider client={queryClient}>
-        <RootNavigator fontsLoaded={fontsLoaded} />
+        {/* Light/dark: follows the phone unless the user picks one in Profile → Appearance. */}
+        <ThemeProvider>
+          <RootNavigator fontsLoaded={fontsLoaded} />
+        </ThemeProvider>
       </QueryClientProvider>
     </ClerkProvider>
   );
 }
 
 function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
+  useTheme(); // re-render the navigator (screen backgrounds) on light/dark switch
   const { isLoaded, isSignedIn, userId } = useAuth();
 
   // Different user (or signed out) → drop every cached server response from the previous user.
@@ -113,9 +117,9 @@ function MissingConfig() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
   padded: { padding: spacing.xl, gap: spacing.md },
   heading: { fontSize: 20, fontWeight: '700', color: colors.text },
   muted: { fontSize: 15, color: colors.textMuted, textAlign: 'center' },
-});
+}));

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 import { Amount, AppText, Badge, IconButton, PressableScale, type IconName } from '@/components/ui';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, radius, spacing, themed } from '@/theme';
 
 export type BalanceAction = 'voice' | 'add' | 'budgets' | 'goals';
 
@@ -80,7 +80,7 @@ export function BalanceCard({ balance, currency, hidden, changePct, onToggleHidd
             accessibilityLabel={a.label}
           >
             <View style={[styles.actionIcon, a.primary && styles.actionPrimary]}>
-              <Ionicons name={a.icon} size={22} color={a.primary ? colors.primary : colors.textOnPrimary} />
+              <Ionicons name={a.icon} size={22} color={a.primary ? colors.textOnAccent : colors.textOnPrimary} />
             </View>
             <AppText variant="caption" color={colors.textOnPrimaryMuted} style={styles.actionLabel}>
               {a.label}
@@ -92,7 +92,7 @@ export function BalanceCard({ balance, currency, hidden, changePct, onToggleHidd
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   card: { backgroundColor: colors.primary, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.sm, overflow: 'hidden' },
   ring: { position: 'absolute', borderRadius: 999, borderWidth: 1.5, borderColor: 'rgba(200,241,105,0.16)' },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -108,4 +108,4 @@ const styles = StyleSheet.create({
   },
   actionPrimary: { backgroundColor: colors.accent },
   actionLabel: { fontFamily: fonts.semibold },
-});
+}));

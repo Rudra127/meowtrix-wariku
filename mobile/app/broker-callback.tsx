@@ -15,9 +15,10 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { queryKeys } from '@/api/queryClient';
 import { AppText } from '@/components/ui';
-import { colors, spacing } from '@/theme';
+import { colors, spacing, themed, useTheme } from '@/theme';
 
 export default function BrokerCallback() {
+  useTheme(); // re-render on light/dark switch
   const { status } = useLocalSearchParams<{ status?: string; provider?: string }>();
   const queryClient = useQueryClient();
 
@@ -29,13 +30,13 @@ export default function BrokerCallback() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator color={colors.primary} size="large" />
+      <ActivityIndicator color={colors.brand} size="large" />
       <AppText variant="bodyStrong">{status === 'connected' ? 'Connected' : 'Finishing up…'}</AppText>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -43,4 +44,4 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     backgroundColor: colors.background,
   },
-});
+}));

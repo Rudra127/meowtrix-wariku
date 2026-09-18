@@ -5,13 +5,14 @@ import { Animated, LayoutAnimation, Pressable, StyleSheet, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/ui';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
-import { colors, fonts, motion, radius, shadow, spacing } from '@/theme';
+import { colors, fonts, motion, radius, shadow, spacing, themed, useTheme } from '@/theme';
 
 /**
  * Floating dark-green pill tab bar. The active tab expands into a lime pill with its label.
  * Icons/titles come from each <Tabs.Screen options>. Hidden while the keyboard is open.
  */
 export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  useTheme(); // re-render on light/dark switch
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   if (keyboardVisible) return null;
@@ -74,7 +75,7 @@ function TabIcon({ focused, children }: { focused: boolean; children: React.Reac
   return <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>;
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   wrapper: { position: 'absolute', left: spacing.xl, right: spacing.xl, alignItems: 'center', pointerEvents: 'box-none' },
   bar: {
     flexDirection: 'row',
@@ -99,4 +100,4 @@ const styles = StyleSheet.create({
   },
   itemActive: { backgroundColor: colors.accent, paddingHorizontal: spacing.lg, flexGrow: 1 },
   label: { fontFamily: fonts.bold, fontSize: 14 },
-});
+}));

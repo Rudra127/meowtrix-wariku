@@ -3,7 +3,7 @@ import { Animated, Dimensions, Modal, PanResponder, Pressable, ScrollView, Style
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '@/hooks/useKeyboardVisible';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { colors, motion, radius, spacing } from '@/theme';
+import { colors, motion, radius, spacing, themed } from '@/theme';
 import { AppText } from './AppText';
 import { IconButton } from './IconButton';
 
@@ -127,7 +127,7 @@ export function Sheet({ visible, onClose, title, children, scroll, footer }: Pro
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1, justifyContent: 'flex-end' },
   fill: { flex: 1 },
   backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(8,20,16,0.45)' },
@@ -147,4 +147,4 @@ const styles = StyleSheet.create({
   handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.border },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { flex: 1 },
-});
+}));

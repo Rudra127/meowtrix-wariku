@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { colors, fonts, radius, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, spacing, themed } from '@/theme';
 import { AppText } from './AppText';
 
 type Props = { value: string; onChange: (v: string) => void; length?: number; error?: string | null; onComplete?: (code: string) => void };
@@ -22,6 +22,7 @@ export function CodeInput({ value, onChange, length = 6, error, onComplete }: Pr
         })}
       </Pressable>
       <TextInput
+        keyboardAppearance={isDark() ? 'dark' : 'light'}
         ref={ref}
         value={value}
         onChangeText={(t) => {
@@ -48,7 +49,7 @@ export function CodeInput({ value, onChange, length = 6, error, onComplete }: Pr
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { gap: spacing.sm },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   box: {
@@ -62,8 +63,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  active: { borderColor: colors.primary, backgroundColor: colors.surface },
+  active: { borderColor: colors.brand, backgroundColor: colors.surface },
   errored: { borderColor: colors.danger },
   digit: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
   hidden: { position: 'absolute', opacity: 0, height: 1, width: 1 },
-});
+}));

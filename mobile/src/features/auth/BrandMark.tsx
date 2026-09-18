@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, fonts } from '@/theme';
+import { colors, fonts, themed } from '@/theme';
 
 /** Placeholder logo: lime squircle with a "W". Swap for the real logo asset when it exists. */
 export function BrandMark({ size = 40 }: { size?: number }) {
@@ -10,7 +10,7 @@ export function BrandMark({ size = 40 }: { size?: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   box: { backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  letter: { fontFamily: fonts.extrabold, color: colors.primary },
-});
+  letter: { fontFamily: fonts.extrabold, color: colors.textOnAccent },
+}));

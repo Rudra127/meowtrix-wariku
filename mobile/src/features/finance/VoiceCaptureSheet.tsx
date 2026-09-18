@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Animated, Linking, StyleSheet, TextInput, View } from 'react-native';
 import { AppText, Badge, Button, FormError, PressableScale, Sheet } from '@/components/ui';
-import { colors, fonts, radius, shadow, spacing } from '@/theme';
+import { colors, fonts, isDark, radius, shadow, spacing, themed } from '@/theme';
 import { DraftRow } from './DraftRow';
 import { MAX_DURATION_MS, useVoiceCapture } from './useVoiceCapture';
 
@@ -105,7 +105,7 @@ export function VoiceCaptureSheet({ visible, onClose, currency, speechEnabled, o
         <>
           {!!capture.result?.transcript && (
             <View style={styles.transcript}>
-              <Ionicons name="ear-outline" size={14} color={colors.primary} />
+              <Ionicons name="ear-outline" size={14} color={colors.brand} />
               <AppText variant="caption" color={colors.text} style={styles.flex}>
                 “{capture.result.transcript}”
               </AppText>
@@ -138,7 +138,7 @@ export function VoiceCaptureSheet({ visible, onClose, currency, speechEnabled, o
         </>
       ) : capture.stage === 'processing' ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
+          <ActivityIndicator color={colors.brand} size="large" />
           <AppText variant="bodyStrong">Working out what you spent…</AppText>
           <AppText variant="caption" center>
             Transcribing and matching categories.
@@ -173,6 +173,7 @@ export function VoiceCaptureSheet({ visible, onClose, currency, speechEnabled, o
                 Describe what you spent in plain words — the AI will split it into transactions.
               </AppText>
               <TextInput
+                keyboardAppearance={isDark() ? 'dark' : 'light'}
                 value={typed}
                 onChangeText={setTyped}
                 placeholder="Spent 250 on coffee and 1,200 on groceries"
@@ -240,13 +241,13 @@ function MicButton({
         accessibilityLabel="Hold to record"
         style={[styles.mic, recording && styles.micActive, shadow.card]}
       >
-        <Ionicons name="mic" size={38} color={recording ? colors.primary : colors.textOnPrimary} />
+        <Ionicons name="mic" size={38} color={recording ? colors.textOnAccent : colors.textOnPrimary} />
       </PressableScale>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   center: { alignItems: 'center', gap: spacing.md, paddingVertical: spacing.lg },
   hint: { maxWidth: 260 },
@@ -282,4 +283,4 @@ const styles = StyleSheet.create({
   },
   unclear: { gap: 2, backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.md },
   footer: { gap: spacing.xs },
-});
+}));

@@ -8,6 +8,7 @@
  * positive; `type` carries the direction. Use `signedAmount()` before displaying.
  */
 import type { IconName } from '@/components/ui';
+import { isDark } from '@/theme';
 import type { CategoryId, ExpenseCategory, IncomeCategory, TransactionType } from '@/api/types';
 
 export type CategoryMeta = {
@@ -15,18 +16,26 @@ export type CategoryMeta = {
   label: string;
   icon: IconName;
   /** Icon colour. */
-  color: string;
-  /** Icon background. */
-  soft: string;
+  readonly color: string;
+  /** Icon background — a pastel in light mode, a subtle tint of `color` in dark mode. */
+  readonly soft: string;
   kind: TransactionType;
 };
+
+/** `#RRGGBB` + alpha → `#RRGGBBAA` (tints category colours for dark surfaces). */
+const withAlpha = (hex: string, alpha: number) =>
+  `${hex}${Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, '0')}`;
 
 const expense = (id: ExpenseCategory, label: string, icon: IconName, color: string, soft: string): CategoryMeta => ({
   id,
   label,
   icon,
   color,
-  soft,
+  get soft() {
+    return isDark() ? withAlpha(color, 0.18) : soft;
+  },
   kind: 'expense',
 });
 
@@ -34,8 +43,13 @@ const income = (id: IncomeCategory, label: string, icon: IconName): CategoryMeta
   id,
   label,
   icon,
-  color: '#0F3B2E',
-  soft: '#EDF9D0',
+  // Brand green reads on light pastel; on dark surfaces switch to the lime accent.
+  get color() {
+    return isDark() ? '#C8F169' : '#0F3B2E';
+  },
+  get soft() {
+    return isDark() ? withAlpha('#C8F169', 0.14) : '#EDF9D0';
+  },
   kind: 'income',
 });
 

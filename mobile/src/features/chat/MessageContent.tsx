@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { AppText } from '@/components/ui';
-import { colors, fonts, spacing } from '@/theme';
+import { colors, fonts, spacing, themed } from '@/theme';
 
 /**
  * Tiny Markdown renderer for LLM replies: paragraphs, **bold**, bullet/numbered lists, headings.
@@ -59,11 +59,11 @@ function inline(text: string, color: string) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { gap: 2 },
   gap: { height: spacing.xs },
   bulletRow: { flexDirection: 'row', gap: spacing.sm, paddingLeft: 2 },
   marker: { minWidth: 14 },
   flex: { flex: 1 },
   bold: { fontFamily: fonts.bold },
-});
+}));

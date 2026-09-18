@@ -14,6 +14,7 @@ npm start          # same as dev (the VM's PM2 process uses this — see .github
 npm test           # node:test + supertest, fully offline
 TEST_MONGODB_URI=mongodb://127.0.0.1:27017/wariku_test npm test   # + real-Mongo auth flow tests
 npm run lint
+npm run seed:learn # upsert Learn content (units, lessons, exercises) from database/seed/learn-content.js
 ```
 
 ## Layout
@@ -27,15 +28,19 @@ backend/
 │   ├── auth.js               GET /auth/me, POST /auth/sync
 │   ├── user.js               PATCH/DELETE /users/me, GET /admin/users
 │   ├── ai.js                 POST /ai/chat
+│   ├── learn.js              GET /learn/path, /learn/stats, /learn/lessons/:slug, POST submit
 │   └── webhooks.js           POST /webhooks/clerk (raw body, Svix-verified)
 ├── services/                 Business logic; throws AppErrors; returns plain data
-│   ├── user-service.js
-│   └── ai-service.js         System prompt (personalised by level/goal) + message validation
+│   ├── user-service.js       Onboarding + cascade delete (fans out to feature deleteAllForUser)
+│   ├── ai-service.js         System prompt (personalised by level/goal) + message validation
+│   └── learn-service.js      Path + grading + XP/streak (pure helpers exported for tests)
 ├── lib/deepseek.js           DeepSeek client (the only file that talks to the LLM provider)
 ├── database/
 │   ├── connection.js
-│   ├── models/user.js        The only model so far; exports LEVELS / GOALS (onboarding answers)
-│   └── repository/           ALL Mongoose queries live here
+│   ├── models/               user.js (exports LEVELS/GOALS) + learn models (unit, lesson,
+│   │                         lesson-progress, learner-stats)
+│   ├── repository/           ALL Mongoose queries live here (user-repository, learn-repository)
+│   └── seed/                 learn-content.js (units + lessons) + seed-learn.js runner
 ├── middlewares/
 │   ├── protect.js            Requires a Clerk session → sets req.user (Mongo doc)
 │   ├── isAdmin.js            After protect; requires req.user.role === "admin"
@@ -87,6 +92,10 @@ All under `/api/v1`. All return the standard envelope.
 | DELETE | `/users/me` | protect | — | `{ deleted: true }` — deletes in Clerk **and** Mongo |
 | GET | `/admin/users` | protect + isAdmin | `?page&limit&search` | `{ items, total, page, limit, totalPages }` |
 | POST | `/ai/chat` | protect + aiLimiter | `{ messages: [{ role: "user"\|"assistant", content }] }` (≤40, last = user, ≤4000 chars each) | `{ message: { role, content }, model, usage }` |
+| GET | `/learn/path` | protect | — | `{ units: [{ id, index, title, description, icon, lessons: [{ id, title, summary, xp, minutes, icon, status }] }], stats }` — units are reordered so the goal-recommended unit comes first; `status` is `"done"\|"current"\|"locked"` |
+| GET | `/learn/stats` | protect | — | `{ stats: { streakDays, longestStreak, xp, dailyGoalXp, todayXp, lessonsDone, accuracy, badges } }` |
+| GET | `/learn/lessons/:slug` | protect | — | `{ lesson: { id, unitId, unitTitle, title, summary, xp, minutes, icon, exercises: [{ type, prompt, options? }] }, progress\|null, status }` — **answers/explanations stripped**; locked lessons → 403 |
+| POST | `/learn/lessons/:slug/submit` | protect | `{ answers: unknown[] }` (one per exercise, in order) | `{ score, correct, total, passed, xpEarned, totalXpForLesson, results: [{ index, isCorrect, correctAnswer, explanation }], stats }` — graded server-side; `xpEarned` is the delta added this submit (retries only earn improvement) |
 | POST | `/webhooks/clerk` | Svix signature | Clerk event | `{ received }` |
 
 Error codes in use: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` /

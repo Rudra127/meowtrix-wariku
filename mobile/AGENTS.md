@@ -141,9 +141,12 @@ export function useLearningPath() {
 
 1. The screen lives in `src/features/<feature>/`; the route file only re-exports it
    (`export { LearnScreen as default } from '@/features/learn/LearnScreen';`).
-2. Swap `sampleData.ts` for real API hooks (add endpoints to `src/api/endpoints.ts`).
-3. Nested screens (e.g. a lesson player) go in `app/(tabs)/…` folders or a new top-level stack inside the
-   `Stack.Protected guard={isSignedIn}` block in `app/_layout.tsx`.
+2. Swap `sampleData.ts` for real API hooks (add endpoints to `src/api/endpoints.ts`) — see the Learn
+   feature for the shape: `learnApi` + `useLearningPath` / `useLessonDetail` / `useSubmitLesson` in
+   `features/learn/useLearn.ts`, invalidating `queryKeys.learn.all` on mutation success.
+3. Nested screens (e.g. the lesson player at `app/lesson/[slug].tsx`) live outside `(tabs)` as top-level
+   stack screens inside the `Stack.Protected guard={isSignedIn && !needsOnboarding}` block in
+   `app/_layout.tsx`; that hides the tab bar so the screen is truly full-screen.
 4. Use theme tokens and `components/ui` — no hard-coded colours.
 5. Run `npm run typecheck && npm run lint`.
 

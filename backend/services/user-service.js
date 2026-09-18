@@ -6,6 +6,7 @@ import UserRepository, {
   fieldsFromClerkUser,
   fieldsFromClerkWebhook,
 } from "../database/repository/user-repository.js";
+import LearnService from "./learn-service.js";
 import { NotFoundError, ValidationError } from "../utils/index.js";
 
 // Fields a user may change on their own profile via PATCH /users/me.
@@ -20,8 +21,9 @@ const SELF_EDITABLE = {
 };
 
 export default class UserService {
-  constructor(repository = new UserRepository()) {
+  constructor(repository = new UserRepository(), learnService = new LearnService()) {
     this.repository = repository;
+    this.learnService = learnService;
   }
 
   /**
@@ -84,11 +86,17 @@ export default class UserService {
     return user;
   }
 
-  /** Deletes the account everywhere: Clerk (identity + sessions) and our DB (app data). */
+  /**
+   * Deletes the account everywhere: Clerk (identity + sessions) and our DB (app data).
+   * User-owned collections must be cleaned up here — look up the local user by clerkId
+   * FIRST so services keyed on `user._id` can find their rows before we delete the user.
+   * When you add a new feature that owns per-user data, plug it in below (see learn).
+   */
   async deleteMe(clerkId) {
+    const user = await this.repository.findByClerkId(clerkId);
+    if (user) await this._cascadeDelete(user._id);
     await clerkClient.users.deleteUser(clerkId);
     await this.repository.deleteByClerkId(clerkId);
-    // TODO(feature teams): also delete documents in your collections that reference this user.
   }
 
   async list(query) {
@@ -105,6 +113,15 @@ export default class UserService {
   }
 
   async handleClerkUserDeleted(data) {
-    if (data?.id) await this.repository.deleteByClerkId(data.id);
+    if (!data?.id) return;
+    const user = await this.repository.findByClerkId(data.id);
+    if (user) await this._cascadeDelete(user._id);
+    await this.repository.deleteByClerkId(data.id);
+  }
+
+  /** Fan-out cleanup for per-user data across feature services. Called on account deletion. */
+  async _cascadeDelete(userId) {
+    await this.learnService.deleteAllForUser(userId);
+    // TODO(feature teams): call your service's `deleteAllForUser(userId)` here (money, chat, …).
   }
 }

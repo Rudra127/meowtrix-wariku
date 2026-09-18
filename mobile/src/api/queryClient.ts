@@ -15,4 +15,10 @@ export const queryClient = new QueryClient({
 /** Query keys in one place so invalidation stays consistent. */
 export const queryKeys = {
   me: ['me'] as const,
+  learn: {
+    all: ['learn'] as const,
+    path: ['learn', 'path'] as const,
+    stats: ['learn', 'stats'] as const,
+    lesson: (slug: string) => ['learn', 'lesson', slug] as const,
+  },
 };

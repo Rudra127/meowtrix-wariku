@@ -1,30 +1,55 @@
 import { useUser } from '@clerk/expo';
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import type { LearnerStats } from '@/api/types';
 import { AppText, Avatar, Badge, Button, Card, PressableScale, ProgressBar, Screen, SectionHeader, Sheet } from '@/components/ui';
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
+import { getErrorMessage } from '@/lib/errors';
 import { greeting } from '@/lib/format';
 import { colors, radius, spacing } from '@/theme';
 import { LessonNode } from './LessonNode';
-import { learnerStats, personalizePath, units as allUnits, type Lesson } from './sampleData';
+import type { Lesson } from './sampleData';
+import { useLearningPath } from './useLearn';
 
 // Zig-zag horizontal offsets for the path, Duolingo style.
 const OFFSETS = [0, 56, 84, 56, 0, -56, -84, -56];
 
+// Safe defaults so the header/tiles render before path data lands (or if it errors).
+const EMPTY_STATS: LearnerStats = {
+  streakDays: 0,
+  longestStreak: 0,
+  xp: 0,
+  dailyGoalXp: 50,
+  todayXp: 0,
+  lessonsDone: 0,
+  accuracy: 0,
+  badges: 0,
+};
+
 export function LearnScreen() {
   const { user } = useUser();
+  const router = useRouter();
   const [selected, setSelected] = useState<Lesson | null>(null);
   const [placementOpen, setPlacementOpen] = useState(false);
   const { plan, level } = usePersonalization();
-  // Recommended unit (from the onboarding goal) goes first and holds the current lesson.
-  const units = useMemo(() => personalizePath(allUnits, plan.learnUnitId), [plan.learnUnitId]);
+  const path = useLearningPath();
+
+  // Server has already reordered units by user.goal and computed done/current/locked.
+  const units = path.data?.units ?? [];
+  const stats = path.data?.stats ?? EMPTY_STATS;
   const current = units.flatMap((u) => u.lessons).find((l) => l.status === 'current');
   const currentUnit = units.find((u) => u.lessons.some((l) => l.id === current?.id));
   const unitProgress = currentUnit
     ? currentUnit.lessons.filter((l) => l.status === 'done').length / currentUnit.lessons.length
     : 0;
   const name = user?.firstName || 'there';
+
+  const startLesson = (slug: string) => {
+    setSelected(null);
+    router.push(`/lesson/${slug}`);
+  };
 
   let nodeIndex = 0;
 
@@ -42,11 +67,11 @@ export function LearnScreen() {
         <View style={styles.stats}>
           <View style={styles.statChip}>
             <Ionicons name="flame" size={16} color="#F97316" />
-            <AppText variant="bodyStrong">{learnerStats.streakDays}</AppText>
+            <AppText variant="bodyStrong">{stats.streakDays}</AppText>
           </View>
           <View style={styles.statChip}>
             <Ionicons name="flash" size={16} color={colors.primary} />
-            <AppText variant="bodyStrong">{learnerStats.xp}</AppText>
+            <AppText variant="bodyStrong">{stats.xp}</AppText>
           </View>
         </View>
       </View>
@@ -70,7 +95,7 @@ export function LearnScreen() {
             <AppText variant="caption" color={colors.textOnPrimaryMuted}>
               {Math.round(unitProgress * 100)}% of unit complete
             </AppText>
-            <Button title="Continue" variant="accent" size="sm" onPress={() => setSelected(current)} icon={<Ionicons name="play" size={14} color={colors.primary} />} />
+            <Button title="Continue" variant="accent" size="sm" onPress={() => startLesson(current.id)} icon={<Ionicons name="play" size={14} color={colors.primary} />} />
           </View>
         </View>
       )}
@@ -99,19 +124,34 @@ export function LearnScreen() {
             <Ionicons name="trophy-outline" size={16} color={colors.textMuted} />
           </View>
           <AppText variant="heading">
-            {learnerStats.todayXp}
-            <AppText variant="caption"> / {learnerStats.dailyGoalXp} XP</AppText>
+            {stats.todayXp}
+            <AppText variant="caption"> / {stats.dailyGoalXp} XP</AppText>
           </AppText>
-          <ProgressBar value={learnerStats.todayXp / learnerStats.dailyGoalXp} />
+          <ProgressBar value={stats.dailyGoalXp > 0 ? stats.todayXp / stats.dailyGoalXp : 0} />
         </Card>
         <Card style={styles.smallTile}>
           <AppText variant="label">Accuracy</AppText>
-          <AppText variant="heading">{Math.round(learnerStats.accuracy * 100)}%</AppText>
-          <AppText variant="caption">{learnerStats.lessonsDone} lessons</AppText>
+          <AppText variant="heading">{Math.round(stats.accuracy * 100)}%</AppText>
+          <AppText variant="caption">{stats.lessonsDone} lessons</AppText>
         </Card>
       </View>
 
-      <Badge label="Preview · sample lessons" icon="construct-outline" />
+      {/* Loading + error states surface here so the rest of the UI stays intact. */}
+      {path.isPending && !path.data && (
+        <View style={styles.centerLine}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      )}
+      {path.isError && (
+        <Card tone="muted" style={styles.errorCard}>
+          <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} />
+          <View style={styles.flex}>
+            <AppText variant="bodyStrong">Couldn&apos;t load lessons</AppText>
+            <AppText variant="caption">{getErrorMessage(path.error)}</AppText>
+          </View>
+          <Button title="Retry" size="sm" variant="secondary" onPress={() => path.refetch()} />
+        </Card>
+      )}
 
       {/* Learning path */}
       {units.map((unit, unitIndex) => (
@@ -136,10 +176,10 @@ export function LearnScreen() {
         </View>
       ))}
 
-      <LessonSheet lesson={selected} onClose={() => setSelected(null)} />
+      <LessonSheet lesson={selected} onClose={() => setSelected(null)} onStart={startLesson} />
       <Sheet visible={placementOpen} onClose={() => setPlacementOpen(false)} title="Placement check">
         <AppText variant="body" color={colors.textMuted}>
-          A short quiz that unlocks lessons you already know, so {level.label.toLowerCase()} learners don’t repeat the basics.
+          A short quiz that unlocks lessons you already know, so {level.label.toLowerCase()} learners don&rsquo;t repeat the basics.
         </AppText>
         <Badge label="Coming soon" tone="accent" icon="sparkles" />
         <Button title="Got it" variant="secondary" onPress={() => setPlacementOpen(false)} />
@@ -148,7 +188,7 @@ export function LearnScreen() {
   );
 }
 
-function LessonSheet({ lesson, onClose }: { lesson: Lesson | null; onClose: () => void }) {
+function LessonSheet({ lesson, onClose, onStart }: { lesson: Lesson | null; onClose: () => void; onStart: (slug: string) => void }) {
   const locked = lesson?.status === 'locked';
   return (
     <Sheet visible={!!lesson} onClose={onClose} title={lesson?.title}>
@@ -162,25 +202,18 @@ function LessonSheet({ lesson, onClose }: { lesson: Lesson | null; onClose: () =
             <Badge label={`+${lesson.xp} XP`} icon="flash" tone="accent" />
             {lesson.status === 'done' && <Badge label="Completed" icon="checkmark" tone="success" />}
           </View>
-          {locked ? (
+          {locked && (
             <Card tone="muted" style={styles.lockedCard}>
               <Ionicons name="lock-closed" size={18} color={colors.textMuted} />
               <AppText variant="caption" style={styles.flex}>
                 Finish the lessons before this one to unlock it.
               </AppText>
             </Card>
-          ) : (
-            <Card tone="muted" style={styles.lockedCard}>
-              <Ionicons name="construct-outline" size={18} color={colors.textMuted} />
-              <AppText variant="caption" style={styles.flex}>
-                The lesson player is next on the roadmap — this is a preview of the path.
-              </AppText>
-            </Card>
           )}
           <Button
             title={locked ? 'Got it' : lesson.status === 'done' ? 'Review lesson' : 'Start lesson'}
             variant={locked ? 'secondary' : 'primary'}
-            onPress={onClose}
+            onPress={locked ? onClose : () => onStart(lesson.id)}
           />
         </>
       )}
@@ -238,4 +271,6 @@ const styles = StyleSheet.create({
   path: { alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.sm },
   sheetStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   lockedCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  centerLine: { alignItems: 'center', paddingVertical: spacing.lg },
+  errorCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
 });

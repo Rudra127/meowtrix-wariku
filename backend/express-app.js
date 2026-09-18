@@ -8,6 +8,7 @@ import morgan from "morgan";
 
 import ai from "./api/ai.js";
 import auth from "./api/auth.js";
+import learn from "./api/learn.js";
 import user from "./api/user.js";
 import webhooks from "./api/webhooks.js";
 import { config } from "./config/index.js";
@@ -68,6 +69,7 @@ const expressApp = async (app) => {
   auth(app);
   user(app);
   ai(app);
+  learn(app);
 
   app.use((req) => {
     throw new NotFoundError(`Route not found: ${req.method} ${req.path}`);

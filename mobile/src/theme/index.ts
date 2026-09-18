@@ -72,21 +72,10 @@ export const typography = {
 
 export type TypographyVariant = keyof typeof typography;
 
+/** CSS-style shadows (supported on iOS/Android with the New Architecture, and on web). */
 export const shadow = {
-  card: {
-    shadowColor: '#0F3B2E',
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  floating: {
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
-  },
+  card: { boxShadow: '0px 6px 16px rgba(15, 59, 46, 0.06)' },
+  floating: { boxShadow: '0px 10px 24px rgba(0, 0, 0, 0.18)' },
 } as const;
 
 /** Space to leave at the bottom of tab screens so content clears the floating tab bar. */

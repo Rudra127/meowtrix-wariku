@@ -40,7 +40,7 @@ export function ChatScreen() {
     <Screen
       scroll={false}
       background={
-        <LinearGradient colors={[colors.mint, colors.background]} style={styles.gradient} pointerEvents="none" />
+        <LinearGradient colors={[colors.mint, colors.background]} style={styles.gradient} />
       }
     >
       <View style={styles.header}>
@@ -169,7 +169,7 @@ function Bubble({ message }: { message: ChatMessage }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  gradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 360 },
+  gradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 360, pointerEvents: 'none' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -16,7 +16,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
   if (keyboardVisible) return null;
 
   return (
-    <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, spacing.md) }]} pointerEvents="box-none">
+    <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, spacing.md) }]}>
       <View style={[styles.bar, shadow.floating]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
@@ -57,7 +57,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
 }
 
 const styles = StyleSheet.create({
-  wrapper: { position: 'absolute', left: spacing.xl, right: spacing.xl, alignItems: 'center' },
+  wrapper: { position: 'absolute', left: spacing.xl, right: spacing.xl, alignItems: 'center', pointerEvents: 'box-none' },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',

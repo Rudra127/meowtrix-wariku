@@ -9,6 +9,10 @@ Read the root [`AGENTS.md`](../AGENTS.md) first for product context and repo-wid
 > - `Tabs` is imported from **`expo-router/js-tabs`** (the `expo-router` export is deprecated).
 > - Tab bar icon `color` is a `ColorValue`, not `string`.
 > - Use `npx expo install <pkg>` (not `npm install`) so native package versions match the SDK.
+> - **Every route group needs its own `_layout.tsx`.** `<Stack.Screen name="(onboarding)">` in the root layout only
+>   matches if `app/(onboarding)/_layout.tsx` exists; otherwise the route is registered as `(onboarding)/<file>`,
+>   the guard has nothing to show, and the screen is blank (warning: "No route named … exists").
+> - Use `boxShadow` (theme `shadow.*`) and `style.pointerEvents` — `shadow*` props and the `pointerEvents` prop are deprecated.
 
 ## Commands
 

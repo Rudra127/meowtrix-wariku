@@ -14,10 +14,11 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { AnswerCheck, LessonAnswer } from '@/api/types';
 import { AppText, Badge, Button, FormError, IconButton, ProgressBar, Sheet } from '@/components/ui';
+import { KEYBOARD_BEHAVIOR } from '@/hooks/useKeyboardVisible';
 import { getErrorMessage } from '@/lib/errors';
 import { colors, fonts, radius, spacing } from '@/theme';
 import { nudge, praise } from './gamification';
@@ -188,7 +189,7 @@ export function LessonPlayerScreen({ slug }: Props) {
   return (
     <Shell>
       <TopBar progress={(index + (feedback ? 1 : 0)) / total} onClose={requestClose} counter={`${index + 1}/${total}`} combo={combo} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_BEHAVIOR}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Animated.View style={[styles.question, animatedStyle]}>
             <View style={styles.metaRow}>

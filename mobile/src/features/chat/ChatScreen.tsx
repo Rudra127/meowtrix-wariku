@@ -8,7 +8,7 @@ import { AppText, Button, IconButton, PressableScale, Screen, type IconName } fr
 import { useBrokerages } from '@/features/finance/useFinance';
 import { DATA_SUGGESTIONS, HOLDINGS_SUGGESTION } from '@/features/onboarding/options';
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
-import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
+import { useKeyboardInset } from '@/hooks/useKeyboardVisible';
 import { getErrorMessage } from '@/lib/errors';
 import { colors, fonts, radius, shadow, spacing } from '@/theme';
 import { AiOrb } from './AiOrb';
@@ -36,9 +36,13 @@ export function ChatScreen() {
   const [input, setInput] = useState('');
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const insets = useSafeAreaInsets();
-  const keyboardVisible = useKeyboardVisible();
-  // Keep the composer just above the floating tab bar (or the keyboard when it's open).
-  const composerBottom = keyboardVisible ? spacing.sm : Math.max(insets.bottom, spacing.md) + 64 + spacing.md;
+  const { height: keyboardHeight, visible: keyboardVisible } = useKeyboardInset();
+  // Keep the composer just above the floating tab bar, or above the keyboard when it's open.
+  // The screen sets `scroll={false}`, so there's no KeyboardAvoidingView doing this for us: pad by
+  // the real keyboard height or the composer stays hidden underneath it on Android.
+  const composerBottom = keyboardVisible
+    ? keyboardHeight + spacing.sm
+    : Math.max(insets.bottom, spacing.md) + 64 + spacing.md;
 
   useEffect(() => {
     if (messages.length) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);

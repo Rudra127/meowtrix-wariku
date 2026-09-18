@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
+import { KEYBOARD_BEHAVIOR } from '@/hooks/useKeyboardVisible';
 import { colors, spacing, TAB_BAR_CLEARANCE } from '@/theme';
 
 type Props = {
@@ -25,7 +26,7 @@ export function Screen({ children, scroll = true, edges = ['top'], tabBarSpace, 
       <StatusBar style="dark" />
       {background}
       <SafeAreaView style={styles.flex} edges={edges}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_BEHAVIOR}>
           {scroll ? (
             <ScrollView
               contentContainerStyle={[styles.content, bottom, contentStyle]}

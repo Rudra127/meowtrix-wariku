@@ -1,5 +1,6 @@
-import { Modal, Pressable, ScrollView, StyleSheet, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardInset } from '@/hooks/useKeyboardVisible';
 import { colors, radius, spacing } from '@/theme';
 import { AppText } from './AppText';
 import { IconButton } from './IconButton';
@@ -18,11 +19,22 @@ type Props = {
 /** Bottom sheet (slide-up modal with a dimmed backdrop). Tap outside or ✕ to close. */
 export function Sheet({ visible, onClose, title, children, scroll, footer }: Props) {
   const insets = useSafeAreaInsets();
+  const { height: keyboardHeight, visible: keyboardUp } = useKeyboardInset();
+
+  // The sheet is glued to the bottom of the screen, so an open keyboard sits right on top of its
+  // inputs. Padding the bottom by the keyboard height pushes the whole sheet above it.
+  //
+  // `KeyboardAvoidingView` is deliberately not used here: on Android a Modal renders in its own
+  // window, which the OS never resizes, so the view has nothing to react to and the sheet stays put.
+  // When the keyboard is up it already covers the navigation bar, so the safe-area inset would
+  // double-count and leave a visible gap.
+  const paddingBottom = keyboardUp ? keyboardHeight + spacing.md : insets.bottom + spacing.xl;
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={styles.flex}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.xl }, scroll && styles.sheetCapped]}>
+        <View style={[styles.sheet, { paddingBottom }, scroll && styles.sheetCapped]}>
           <View style={styles.handle} />
           {title ? (
             <View style={styles.header}>
@@ -44,7 +56,7 @@ export function Sheet({ visible, onClose, title, children, scroll, footer }: Pro
           )}
           {footer}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText, Badge, IconButton } from '@/components/ui';
+import { KEYBOARD_BEHAVIOR } from '@/hooks/useKeyboardVisible';
 import { colors, radius, spacing } from '@/theme';
 import { BrandMark } from './BrandMark';
 
@@ -25,7 +26,7 @@ export function AuthLayout({ hero, title, subtitle, showBack, children }: Props)
       <View style={[styles.ring, { width: 320, height: 320, top: -120, right: -110 }]} />
       <View style={[styles.ring, { width: 200, height: 200, top: 40, right: -60, opacity: 0.5 }]} />
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_BEHAVIOR}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Amount,
@@ -12,6 +12,7 @@ import {
   SectionHeader,
   type IconName,
 } from '@/components/ui';
+import { Reveal, Skeleton, Toast } from '@/components/motion';
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getErrorMessage } from '@/lib/errors';
@@ -64,11 +65,7 @@ export function MoneyScreen() {
 
   // First load: the header would otherwise show a confident ₹0 before the real balance arrives.
   if (summary.isPending) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
+    return <MoneySkeleton top={insets.top} />;
   }
 
   return (
@@ -78,20 +75,22 @@ export function MoneyScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        <View style={styles.header}>
-          <View>
-            <AppText variant="label">Overview · {monthName()}</AppText>
-            <AppText variant="title">Your money</AppText>
+        <Reveal>
+          <View style={styles.header}>
+            <View>
+              <AppText variant="label">Overview · {monthName()}</AppText>
+              <AppText variant="title">Your money</AppText>
+            </View>
+            <View style={styles.headerActions}>
+              <IconButton
+                icon="mic"
+                tone="dark"
+                onPress={() => setSheet('voice')}
+                accessibilityLabel="Add a transaction by voice"
+              />
+            </View>
           </View>
-          <View style={styles.headerActions}>
-            <IconButton
-              icon="mic"
-              tone="dark"
-              onPress={() => setSheet('voice')}
-              accessibilityLabel="Add a transaction by voice"
-            />
-          </View>
-        </View>
+        </Reveal>
 
         {summary.isError ? (
           <Card elevated style={styles.errorCard}>
@@ -102,61 +101,69 @@ export function MoneyScreen() {
           </Card>
         ) : (
           <>
-            <BalanceCard
-              balance={data?.balance.total ?? 0}
-              currency={currency}
-              hidden={hidden}
-              changePct={data?.changePct ?? 0}
-              onToggleHidden={() => setHidden((h) => !h)}
-              onAction={onAction}
-            />
+            <Reveal index={1}>
+              <BalanceCard
+                balance={data?.balance.total ?? 0}
+                currency={currency}
+                hidden={hidden}
+                changePct={data?.changePct ?? 0}
+                onToggleHidden={() => setHidden((h) => !h)}
+                onAction={onAction}
+              />
+            </Reveal>
 
             {/* Goal from onboarding decides what leads the dashboard */}
-            <FocusCard focus={plan.moneyFocus} summary={data} currency={currency} hidden={hidden} />
+            <Reveal index={2}>
+              <FocusCard focus={plan.moneyFocus} summary={data} currency={currency} hidden={hidden} />
+            </Reveal>
 
-            <SpendingChart currency={currency} />
+            <Reveal index={3}>
+              <SpendingChart currency={currency} />
+            </Reveal>
 
-            <View style={styles.grid}>
-              <StatTile
-                label="Earned"
-                icon="arrow-down-outline"
-                minor={data?.totals.income ?? 0}
-                currency={currency}
-                note="This month"
-                hidden={hidden}
-                positive
-              />
-              <StatTile
-                label="Spent"
-                icon="arrow-up-outline"
-                minor={data?.totals.expense ?? 0}
-                currency={currency}
-                note={`${data?.totals.count ?? 0} transactions`}
-                hidden={hidden}
-              />
-              <StatTile
-                label="Left over"
-                icon="wallet-outline"
-                minor={data?.totals.net ?? 0}
-                currency={currency}
-                note="Income − spending"
-                hidden={hidden}
-                positive={(data?.totals.net ?? 0) >= 0}
-              />
-              <StatTile
-                label="Budget left"
-                icon="pie-chart-outline"
-                minor={data?.budgetTotals.remaining ?? 0}
-                currency={currency}
-                note={
-                  data?.budgetTotals.limit
-                    ? `${data.daysLeftInMonth} days to go`
-                    : 'No budgets set'
-                }
-                hidden={hidden}
-                positive={(data?.budgetTotals.remaining ?? 0) >= 0}
-              />
-            </View>
+            <Reveal index={4}>
+              <View style={styles.grid}>
+                <StatTile
+                  label="Earned"
+                  icon="arrow-down-outline"
+                  minor={data?.totals.income ?? 0}
+                  currency={currency}
+                  note="This month"
+                  hidden={hidden}
+                  positive
+                />
+                <StatTile
+                  label="Spent"
+                  icon="arrow-up-outline"
+                  minor={data?.totals.expense ?? 0}
+                  currency={currency}
+                  note={`${data?.totals.count ?? 0} transactions`}
+                  hidden={hidden}
+                />
+                <StatTile
+                  label="Left over"
+                  icon="wallet-outline"
+                  minor={data?.totals.net ?? 0}
+                  currency={currency}
+                  note="Income − spending"
+                  hidden={hidden}
+                  positive={(data?.totals.net ?? 0) >= 0}
+                />
+                <StatTile
+                  label="Budget left"
+                  icon="pie-chart-outline"
+                  minor={data?.budgetTotals.remaining ?? 0}
+                  currency={currency}
+                  note={
+                    data?.budgetTotals.limit
+                      ? `${data.daysLeftInMonth} days to go`
+                      : 'No budgets set'
+                  }
+                  hidden={hidden}
+                  positive={(data?.budgetTotals.remaining ?? 0) >= 0}
+                />
+              </View>
+            </Reveal>
 
             <SectionHeader title="Budgets" action="Manage" onAction={() => setSheet('budgets')} />
             {data && data.budgets.length > 0 ? (
@@ -226,7 +233,17 @@ export function MoneyScreen() {
 
             <SectionHeader title="Recent transactions" />
             {recent.isPending ? (
-              <ActivityIndicator color={colors.primary} />
+              <Card elevated style={styles.list}>
+                {[0, 1, 2].map((i) => (
+                  <View key={i} style={styles.skelRow}>
+                    <Skeleton width={44} height={44} radius={radius.md} />
+                    <View style={styles.skelText}>
+                      <Skeleton width="60%" height={13} />
+                      <Skeleton width="35%" height={11} />
+                    </View>
+                  </View>
+                ))}
+              </Card>
             ) : transactions.length > 0 ? (
               <Card elevated style={styles.list}>
                 {transactions.map((tx) => (
@@ -250,15 +267,7 @@ export function MoneyScreen() {
         )}
       </ScrollView>
 
-      {toast && (
-        <View style={[styles.toast, { bottom: TAB_BAR_CLEARANCE }]} pointerEvents="none">
-          <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
-          <AppText variant="caption" color={colors.textOnPrimary}>
-            {toast}
-          </AppText>
-        </View>
-      )}
-
+      <Toast message={toast} bottom={TAB_BAR_CLEARANCE} />
       <VoiceCaptureSheet
         visible={sheet === 'voice'}
         onClose={() => setSheet(null)}
@@ -332,9 +341,36 @@ function EmptyCard({
   );
 }
 
+/** First-load placeholder shaped like the real dashboard, so the page doesn't jump when data lands. */
+function MoneySkeleton({ top }: { top: number }) {
+  return (
+    <View style={[styles.root, styles.content, { paddingTop: top + spacing.md }]}>
+      <Skeleton width={110} height={12} />
+      <Skeleton width={180} height={28} />
+      <View style={styles.skelHero}>
+        <Skeleton tone="dark" width="35%" height={12} />
+        <Skeleton tone="dark" width="65%" height={38} />
+        <View style={styles.skelActions}>
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} tone="dark" width={54} height={54} radius={27} />
+          ))}
+        </View>
+      </View>
+      <Skeleton height={150} radius={radius.lg} />
+      <View style={styles.skelActions}>
+        <Skeleton width="48%" height={96} radius={radius.lg} />
+        <Skeleton width="48%" height={96} radius={radius.lg} />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  skelHero: { backgroundColor: colors.primary, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md },
+  skelActions: { flexDirection: 'row', justifyContent: 'space-between' },
+  skelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
+  skelText: { flex: 1, gap: spacing.xs + 2 },
   root: { flex: 1, backgroundColor: colors.background },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
   content: {
     paddingHorizontal: spacing.xl,
     paddingBottom: TAB_BAR_CLEARANCE,
@@ -368,15 +404,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   errorCard: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl },
-  toast: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.ink,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
 });

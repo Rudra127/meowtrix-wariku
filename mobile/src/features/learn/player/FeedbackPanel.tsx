@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import type { AnswerCheck, PublicExercise } from '@/api/types';
 import { AppText, Button } from '@/components/ui';
-import { colors, radius, spacing } from '@/theme';
+import { colors, motion, radius, spacing } from '@/theme';
 import { formatAnswer } from './exerciseMeta';
 
 type Props = {
@@ -20,7 +20,7 @@ export function FeedbackPanel({ check, exercise, title, isLast, loading, onConti
   const ok = check.isCorrect;
   const [slide] = useState(() => new Animated.Value(0));
   useEffect(() => {
-    Animated.spring(slide, { toValue: 1, useNativeDriver: true, speed: 14, bounciness: ok ? 10 : 4 }).start();
+    Animated.spring(slide, { toValue: 1, useNativeDriver: true, ...(ok ? motion.spring.pop : motion.spring.ui) }).start();
   }, [slide, ok]);
 
   return (

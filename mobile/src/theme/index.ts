@@ -80,3 +80,5 @@ export const shadow = {
 
 /** Space to leave at the bottom of tab screens so content clears the floating tab bar. */
 export const TAB_BAR_CLEARANCE = 110;
+
+export { motion } from './motion';

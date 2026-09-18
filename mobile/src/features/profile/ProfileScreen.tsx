@@ -9,6 +9,7 @@ import { queryKeys } from '@/api/queryClient';
 import type { Goal, Level, User } from '@/api/types';
 import { useApi } from '@/api/useApi';
 import { AppText, Avatar, Badge, Button, Card, FormError, PressableScale, Screen, SectionHeader, Sheet } from '@/components/ui';
+import { Reveal } from '@/components/motion';
 import { API_URL } from '@/config/env';
 import { useBrokerages } from '@/features/finance/useFinance';
 import { BrokerageCard } from '@/features/integrations/BrokerageCard';
@@ -98,27 +99,29 @@ export function ProfileScreen() {
     <Screen tabBarSpace>
       <AppText variant="title">Profile</AppText>
 
-      <View style={styles.hero}>
-        <View style={[styles.ring, { width: 240, height: 240, right: -90, top: -120 }]} />
-        <View style={styles.heroTop}>
-          <Avatar name={name} imageUrl={user?.imageUrl} size={64} />
-          <View style={styles.flex}>
-            <AppText variant="heading" color={colors.textOnPrimary} numberOfLines={1}>
-              {name}
-            </AppText>
-            <AppText variant="caption" color={colors.textOnPrimaryMuted} numberOfLines={1}>
-              {user?.primaryEmailAddress?.emailAddress}
-            </AppText>
+      <Reveal index={1}>
+        <View style={styles.hero}>
+          <View style={[styles.ring, { width: 240, height: 240, right: -90, top: -120 }]} />
+          <View style={styles.heroTop}>
+            <Avatar name={name} imageUrl={user?.imageUrl} size={64} />
+            <View style={styles.flex}>
+              <AppText variant="heading" color={colors.textOnPrimary} numberOfLines={1}>
+                {name}
+              </AppText>
+              <AppText variant="caption" color={colors.textOnPrimaryMuted} numberOfLines={1}>
+                {user?.primaryEmailAddress?.emailAddress}
+              </AppText>
+            </View>
+          </View>
+          <View style={styles.heroStats}>
+            <HeroStat icon="flame" value={`${streakDays}`} label="Day streak" />
+            <View style={styles.divider} />
+            <HeroStat icon="flash" value={`${totalXp}`} label="Total XP" />
+            <View style={styles.divider} />
+            <HeroStat icon="ribbon" value={`${badges}`} label="Badges" />
           </View>
         </View>
-        <View style={styles.heroStats}>
-          <HeroStat icon="flame" value={`${streakDays}`} label="Day streak" />
-          <View style={styles.divider} />
-          <HeroStat icon="flash" value={`${totalXp}`} label="Total XP" />
-          <View style={styles.divider} />
-          <HeroStat icon="ribbon" value={`${badges}`} label="Badges" />
-        </View>
-      </View>
+      </Reveal>
 
       <FormError message={error} />
 
@@ -130,59 +133,67 @@ export function ProfileScreen() {
         />
       )}
 
-      <SectionHeader title="Your plan" />
-      <Card elevated style={styles.list}>
-        <SettingsRow icon={plan.icon} label="Main goal" value={plan.label} onPress={() => setEditing('goal')} />
-        <SettingsRow icon={level.icon} label="Experience level" value={level.label} onPress={() => setEditing('level')} />
-      </Card>
+      <Reveal index={2} style={styles.section}>
+        <SectionHeader title="Your plan" />
+        <Card elevated style={styles.list}>
+          <SettingsRow icon={plan.icon} label="Main goal" value={plan.label} onPress={() => setEditing('goal')} />
+          <SettingsRow icon={level.icon} label="Experience level" value={level.label} onPress={() => setEditing('level')} />
+        </Card>
+      </Reveal>
 
-      <SectionHeader title="Preferences" />
-      <Card elevated style={styles.list}>
-        <SettingsRow icon="cash-outline" label="Currency" value={`${currency} ${currencySymbol(currency).trim()}`} onPress={() => setCurrencyOpen(true)} />
-        <SettingsRow
-          icon="notifications-outline"
-          label="Notifications"
-          right={
-            <Switch
-              value={notifications}
-              onValueChange={setNotifications}
-              trackColor={{ true: colors.primary, false: colors.surfaceMuted }}
-              thumbColor={colors.surface}
-            />
-          }
-        />
-      </Card>
+      <Reveal index={3} style={styles.section}>
+        <SectionHeader title="Preferences" />
+        <Card elevated style={styles.list}>
+          <SettingsRow icon="cash-outline" label="Currency" value={`${currency} ${currencySymbol(currency).trim()}`} onPress={() => setCurrencyOpen(true)} />
+          <SettingsRow
+            icon="notifications-outline"
+            label="Notifications"
+            right={
+              <Switch
+                value={notifications}
+                onValueChange={setNotifications}
+                trackColor={{ true: colors.primary, false: colors.surfaceMuted }}
+                thumbColor={colors.surface}
+              />
+            }
+          />
+        </Card>
+      </Reveal>
 
-      <SectionHeader title="Connected accounts" />
-      {/* Holdings are read only by the Ask AI tab — there's deliberately no portfolio screen. */}
-      {brokerages.data?.map((status) => (
-        <BrokerageCard key={status.provider} status={status} onMessage={setNotice} />
-      ))}
+      <Reveal index={4} style={styles.section}>
+        <SectionHeader title="Connected accounts" />
+        {/* Holdings are read only by the Ask AI tab — there's deliberately no portfolio screen. */}
+        {brokerages.data?.map((status) => (
+          <BrokerageCard key={status.provider} status={status} onMessage={setNotice} />
+        ))}
+      </Reveal>
 
-      <SectionHeader title="Account" />
-      <Card elevated style={styles.list}>
-        <SettingsRow
-          icon="server-outline"
-          label="Backend"
-          onPress={() => backendUser.refetch()}
-          right={
-            backendUser.isPending || backendUser.isFetching ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : backendUser.isError ? (
-              <Badge tone="danger" icon="close-circle" label="Offline" />
-            ) : (
-              <Badge tone="success" icon="checkmark-circle" label="Connected" />
-            )
-          }
-        />
-        {backendUser.isError && (
-          <AppText variant="caption" color={colors.danger}>
-            {getErrorMessage(backendUser.error)} · {API_URL}
-          </AppText>
-        )}
-        <SettingsRow icon="shield-checkmark-outline" label="Signed in with" value={user?.externalAccounts?.length ? 'Google' : 'Email'} />
-        <SettingsRow icon="trash-outline" label="Delete account" tone="danger" onPress={confirmDelete} />
-      </Card>
+      <Reveal index={5} style={styles.section}>
+        <SectionHeader title="Account" />
+        <Card elevated style={styles.list}>
+          <SettingsRow
+            icon="server-outline"
+            label="Backend"
+            onPress={() => backendUser.refetch()}
+            right={
+              backendUser.isPending || backendUser.isFetching ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : backendUser.isError ? (
+                <Badge tone="danger" icon="close-circle" label="Offline" />
+              ) : (
+                <Badge tone="success" icon="checkmark-circle" label="Connected" />
+              )
+            }
+          />
+          {backendUser.isError && (
+            <AppText variant="caption" color={colors.danger}>
+              {getErrorMessage(backendUser.error)} · {API_URL}
+            </AppText>
+          )}
+          <SettingsRow icon="shield-checkmark-outline" label="Signed in with" value={user?.externalAccounts?.length ? 'Google' : 'Email'} />
+          <SettingsRow icon="trash-outline" label="Delete account" tone="danger" onPress={confirmDelete} />
+        </Card>
+      </Reveal>
 
       <Button title="Sign out" variant="secondary" loading={deleteAccount.isPending} onPress={onSignOut} icon={<Ionicons name="log-out-outline" size={18} color={colors.text} />} />
       <AppText variant="caption" center color={colors.textSubtle}>
@@ -263,6 +274,8 @@ function HeroStat({ icon, value, label }: { icon: React.ComponentProps<typeof Io
 }
 
 const styles = StyleSheet.create({
+  // Reveal wrappers group a header with its card; keep the screen's rhythm inside them.
+  section: { gap: spacing.lg },
   flex: { flex: 1 },
   hero: { backgroundColor: colors.primary, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.xl, overflow: 'hidden' },
   ring: { position: 'absolute', borderRadius: 999, borderWidth: 1.5, borderColor: 'rgba(200,241,105,0.16)' },

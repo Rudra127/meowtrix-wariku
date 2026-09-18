@@ -22,7 +22,8 @@ export default function TabsLayout() {
   return (
     <Tabs
       tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
+      // 'shift' = a soft crossfade with a few dp of horizontal drift toward the tab you picked.
+      screenOptions={{ headerShown: false, animation: 'shift', sceneStyle: { backgroundColor: colors.background } }}
     >
       <Tabs.Screen name="index" options={{ title: 'Learn', tabBarIcon: icon('school-outline', 'school') }} />
       <Tabs.Screen name="money" options={{ title: 'Money', tabBarIcon: icon('wallet-outline', 'wallet') }} />

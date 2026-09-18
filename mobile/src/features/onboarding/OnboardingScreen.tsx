@@ -14,6 +14,7 @@ import { queryKeys } from '@/api/queryClient';
 import type { Goal, Level } from '@/api/types';
 import { useApi } from '@/api/useApi';
 import { AppText, Badge, Button, FormError, IconButton, Screen } from '@/components/ui';
+import { Reveal } from '@/components/motion';
 import { BrandMark } from '@/features/auth/BrandMark';
 import { getErrorMessage } from '@/lib/errors';
 import { colors, radius, spacing } from '@/theme';
@@ -109,13 +110,15 @@ export function OnboardingScreen() {
                 { icon: 'school' as const, text: 'A lesson path at your level' },
                 { icon: 'wallet' as const, text: 'A dashboard built around your goal' },
                 { icon: 'sparkles' as const, text: 'AI answers in your language' },
-              ].map((p) => (
-                <View key={p.text} style={styles.point}>
-                  <View style={styles.pointIcon}>
-                    <Ionicons name={p.icon} size={16} color={colors.primary} />
+              ].map((p, i) => (
+                <Reveal key={p.text} index={i} delay={200}>
+                  <View style={styles.point}>
+                    <View style={styles.pointIcon}>
+                      <Ionicons name={p.icon} size={16} color={colors.primary} />
+                    </View>
+                    <AppText variant="bodyStrong">{p.text}</AppText>
                   </View>
-                  <AppText variant="bodyStrong">{p.text}</AppText>
-                </View>
+                </Reveal>
               ))}
             </View>
             <View style={styles.spacer} />
@@ -139,8 +142,10 @@ export function OnboardingScreen() {
               We’ll pitch lessons and AI answers at the right level. You can change this later.
             </AppText>
             <View style={styles.options}>
-              {LEVEL_OPTIONS.map((o) => (
-                <OptionCard key={o.value} {...o} selected={level === o.value} onPress={() => pick(setLevel, o.value, 2)} />
+              {LEVEL_OPTIONS.map((o, i) => (
+                <Reveal key={o.value} index={i} delay={120}>
+                  <OptionCard {...o} selected={level === o.value} onPress={() => pick(setLevel, o.value, 2)} />
+                </Reveal>
               ))}
             </View>
           </View>
@@ -154,15 +159,16 @@ export function OnboardingScreen() {
               Your dashboard will focus on this first.
             </AppText>
             <View style={styles.options}>
-              {GOAL_OPTIONS.map((o) => (
-                <OptionCard
-                  key={o.value}
-                  icon={o.icon}
-                  label={o.label}
-                  description={o.description}
-                  selected={goal === o.value}
-                  onPress={() => pick(setGoal, o.value, 3)}
-                />
+              {GOAL_OPTIONS.map((o, i) => (
+                <Reveal key={o.value} index={i} delay={120}>
+                  <OptionCard
+                    icon={o.icon}
+                    label={o.label}
+                    description={o.description}
+                    selected={goal === o.value}
+                    onPress={() => pick(setGoal, o.value, 3)}
+                  />
+                </Reveal>
               ))}
             </View>
           </View>

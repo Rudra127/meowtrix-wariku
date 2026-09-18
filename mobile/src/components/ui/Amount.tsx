@@ -1,4 +1,5 @@
 import { StyleSheet, Text } from 'react-native';
+import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { moneyParts } from '@/lib/format';
 import { colors, fonts } from '@/theme';
 
@@ -12,11 +13,14 @@ type Props = {
   fractionColor?: string;
   hidden?: boolean;
   showPlus?: boolean;
+  /** Count smoothly to new values (balances, totals). */
+  animate?: boolean;
 };
 
 /** Big money number with muted decimals. */
-export function Amount({ minor, currency = 'INR', size = 36, color = colors.text, fractionColor, hidden, showPlus }: Props) {
-  const p = moneyParts(minor, currency, { showPlus });
+export function Amount({ minor, currency = 'INR', size = 36, color = colors.text, fractionColor, hidden, showPlus, animate }: Props) {
+  const animated = useAnimatedNumber(minor);
+  const p = moneyParts(animate ? animated : minor, currency, { showPlus });
   const base = { fontSize: size, lineHeight: size * 1.15, letterSpacing: size > 24 ? -1 : -0.3, color };
   if (hidden) {
     return <Text style={[styles.text, base]}>{`${p.symbol}••••••`}</Text>;

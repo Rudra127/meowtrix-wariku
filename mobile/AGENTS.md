@@ -57,6 +57,7 @@ mobile/
 │   ├── components/
 │   │   ├── ui/                 Design system — ALWAYS reuse these (see below)
 │   │   ├── fx/                 Confetti, CountUp (celebration effects)
+│   │   ├── motion/             Reveal, Skeleton, Toast (see Motion below)
 │   │   └── navigation/         FloatingTabBar (custom pill tab bar)
 │   ├── lib/                    errors.ts (Clerk/API → text), format.ts (money in minor units, greeting)
 │   └── theme/index.ts          colors, spacing, radius, fonts, typography, shadow, TAB_BAR_CLEARANCE
@@ -118,6 +119,23 @@ Import from `src` with the `@/` alias (`import { Button } from '@/components/ui'
   when a user signs in from a new device). Other second factors show an explanatory error.
 - Google uses `useSSO()` from `@clerk/expo` (browser-based OAuth, works in Expo Go).
 - Dashboard setup and troubleshooting: [`docs/AUTH.md`](../docs/AUTH.md).
+
+## Motion (keep it subtle, Apple-like)
+
+Tokens live in `src/theme/motion.ts` — never hand-tune springs in a screen.
+
+| Need | Use |
+|---|---|
+| Section settles in on mount | `<Reveal index={n}>` (`src/components/motion`) — fade + 14dp rise, staggered by `index` |
+| Loading placeholder | `<Skeleton>` shaped like the real content (not a spinner) |
+| Confirmation ("Transaction added") | `<Toast message={…}>` — springs up, fades out, success haptic |
+| Money that changes | `<Amount animate …>` counts to the new value |
+| Tappable anything | `PressableScale` (press spring + haptic) — `Button`/`IconButton` already use it |
+| Bottom sheet | `Sheet` — springs up, backdrop fades, drag the handle/header down to close |
+
+Rules: springs from `motion.spring.ui` (no wobble) for UI, `motion.spring.pop` only for celebrations;
+always `useNativeDriver: true` unless animating layout/text; respect `useReducedMotion()` (Reveal, Sheet,
+Skeleton and Amount already do); never block interaction on an animation.
 
 ## Learn game loop
 

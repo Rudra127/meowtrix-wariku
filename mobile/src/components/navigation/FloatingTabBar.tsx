@@ -1,10 +1,11 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import * as Haptics from 'expo-haptics';
-import { LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Animated, LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/ui';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
-import { colors, fonts, radius, shadow, spacing } from '@/theme';
+import { colors, fonts, motion, radius, shadow, spacing } from '@/theme';
 
 /**
  * Floating dark-green pill tab bar. The active tab expands into a lime pill with its label.
@@ -28,7 +29,13 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!focused && !event.defaultPrevented) {
               Haptics.selectionAsync().catch(() => {});
-              LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
+              // Spring the active pill's width change (critically damped — no wobble).
+              LayoutAnimation.configureNext({
+                duration: 320,
+                update: { type: LayoutAnimation.Types.spring, springDamping: 0.85 },
+                create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity, duration: 180 },
+                delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity, duration: 120 },
+              });
               navigation.navigate(route.name, route.params);
             }
           };
@@ -42,7 +49,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
               accessibilityLabel={label}
               style={[styles.item, focused && styles.itemActive]}
             >
-              {options.tabBarIcon?.({ focused, color, size: 22 })}
+              <TabIcon focused={focused}>{options.tabBarIcon?.({ focused, color, size: 22 })}</TabIcon>
               {focused && (
                 <AppText variant="caption" color={color} style={styles.label} numberOfLines={1}>
                   {label}
@@ -54,6 +61,17 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
       </View>
     </View>
   );
+}
+
+/** Icon that gives a small spring "pop" when its tab becomes active. */
+function TabIcon({ focused, children }: { focused: boolean; children: React.ReactNode }) {
+  const [scale] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    if (!focused) return;
+    scale.setValue(0.78);
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, ...motion.spring.pop }).start();
+  }, [focused, scale]);
+  return <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>;
 }
 
 const styles = StyleSheet.create({

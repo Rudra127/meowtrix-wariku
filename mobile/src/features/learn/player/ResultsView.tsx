@@ -5,6 +5,7 @@ import { Animated, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ExerciseResult, LearnerStats, LessonAnswer, LessonSubmitResult, PublicExercise } from '@/api/types';
 import { Confetti, CountUp } from '@/components/fx';
+import { Reveal } from '@/components/motion';
 import { AppText, Badge, Button, Card, PressableScale, ProgressBar } from '@/components/ui';
 import { levelFromXp, newlyUnlocked } from '../gamification';
 import { colors, fonts, radius, spacing } from '@/theme';
@@ -86,30 +87,34 @@ export function ResultsView({ result, exercises, answers, lessonTitle, bestCombo
           )}
         </View>
 
-        <View style={styles.tiles}>
-          <StatTile icon="flash" tint={colors.primary} value={result.xpEarned} prefix="+" label={result.xpEarned ? 'XP earned' : 'No new XP'} />
-          <StatTile icon="flame" tint="#F97316" value={stats.streakDays} label="Day streak" />
-          <StatTile icon="checkmark-done" tint={colors.success} value={stats.lessonsDone} label="Lessons" />
-        </View>
+        <Reveal index={1} delay={250}>
+          <View style={styles.tiles}>
+            <StatTile icon="flash" tint={colors.primary} value={result.xpEarned} prefix="+" label={result.xpEarned ? 'XP earned' : 'No new XP'} />
+            <StatTile icon="flame" tint="#F97316" value={stats.streakDays} label="Day streak" />
+            <StatTile icon="checkmark-done" tint={colors.success} value={stats.lessonsDone} label="Lessons" />
+          </View>
+        </Reveal>
 
         {/* Level progress — celebrates level-ups */}
-        <Card elevated style={[styles.goal, leveledUp && styles.levelUp]}>
-          <View style={styles.goalHead}>
-            <View style={styles.levelRow}>
-              <View style={styles.levelBadge}>
-                <AppText variant="bodyStrong" color={colors.accent}>
-                  {level.level}
-                </AppText>
+        <Reveal index={2} delay={250}>
+          <Card elevated style={[styles.goal, leveledUp && styles.levelUp]}>
+            <View style={styles.goalHead}>
+              <View style={styles.levelRow}>
+                <View style={styles.levelBadge}>
+                  <AppText variant="bodyStrong" color={colors.accent}>
+                    {level.level}
+                  </AppText>
+                </View>
+                <View>
+                  <AppText variant="bodyStrong">{leveledUp ? `Level up! ${level.title}` : `Level ${level.level} · ${level.title}`}</AppText>
+                  <AppText variant="caption">{level.toNext} XP to level {level.level + 1}</AppText>
+                </View>
               </View>
-              <View>
-                <AppText variant="bodyStrong">{leveledUp ? `Level up! ${level.title}` : `Level ${level.level} · ${level.title}`}</AppText>
-                <AppText variant="caption">{level.toNext} XP to level {level.level + 1}</AppText>
-              </View>
+              {leveledUp && <Ionicons name="arrow-up-circle" size={24} color={colors.success} />}
             </View>
-            {leveledUp && <Ionicons name="arrow-up-circle" size={24} color={colors.success} />}
-          </View>
-          <ProgressBar value={level.progress} color={colors.accent} trackColor={colors.surfaceMuted} />
-        </Card>
+            <ProgressBar value={level.progress} color={colors.accent} trackColor={colors.surfaceMuted} />
+          </Card>
+        </Reveal>
 
         {unlocked.length > 0 && (
           <Card elevated style={styles.goal}>

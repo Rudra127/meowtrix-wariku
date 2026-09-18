@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Reveal } from '@/components/motion';
 import { AppText, Badge, IconButton } from '@/components/ui';
 import { KEYBOARD_BEHAVIOR } from '@/hooks/useKeyboardVisible';
 import { colors, radius, spacing } from '@/theme';
@@ -46,7 +47,7 @@ export function AuthLayout({ hero, title, subtitle, showBack, children }: Props)
                 </View>
               )}
             </View>
-            <View>
+            <Reveal index={1}>
               {hero.map((line, i) => (
                 <AppText
                   key={line}
@@ -56,20 +57,22 @@ export function AuthLayout({ hero, title, subtitle, showBack, children }: Props)
                   {line}
                 </AppText>
               ))}
-            </View>
-            <View style={styles.badges}>
+            </Reveal>
+            <Reveal index={2} style={styles.badges}>
               <Badge tone="glass" icon="school" label="Learn" />
               <Badge tone="glass" icon="wallet" label="Track" />
               <Badge tone="glass" icon="sparkles" label="Ask AI" />
-            </View>
+            </Reveal>
           </SafeAreaView>
 
           <SafeAreaView edges={['bottom']} style={styles.sheet}>
-            <View style={styles.heading}>
+            <Reveal index={3} style={styles.heading}>
               <AppText variant="title">{title}</AppText>
               {!!subtitle && <AppText variant="body" color={colors.textMuted}>{subtitle}</AppText>}
-            </View>
-            {children}
+            </Reveal>
+            <Reveal index={4} style={styles.form}>
+              {children}
+            </Reveal>
           </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -112,6 +115,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   heading: { gap: spacing.xs },
+  form: { gap: spacing.lg },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   line: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.textSubtle },
 });

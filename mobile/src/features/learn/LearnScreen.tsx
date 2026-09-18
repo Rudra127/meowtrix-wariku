@@ -9,6 +9,7 @@ import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { getErrorMessage } from '@/lib/errors';
 import { greeting } from '@/lib/format';
 import { colors, fonts, radius, spacing } from '@/theme';
+import { Reveal, Skeleton } from '@/components/motion';
 import { AchievementsRow } from './AchievementsRow';
 import { levelFromXp } from './gamification';
 import { LessonNode } from './LessonNode';
@@ -66,120 +67,133 @@ export function LearnScreen() {
   return (
     <Screen tabBarSpace refreshing={path.isRefetching} onRefresh={() => path.refetch()}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Avatar name={user?.fullName ?? name} imageUrl={user?.imageUrl} size={44} />
-          <View>
-            <AppText variant="caption">{greeting()},</AppText>
-            <AppText variant="heading">{name}</AppText>
+      <Reveal>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Avatar name={user?.fullName ?? name} imageUrl={user?.imageUrl} size={44} />
+            <View>
+              <AppText variant="caption">{greeting()},</AppText>
+              <AppText variant="heading">{name}</AppText>
+            </View>
+          </View>
+          <View style={styles.stats}>
+            <View style={styles.statChip}>
+              <StreakFlame active={stats.streakDays > 0} />
+              <AppText variant="bodyStrong">{stats.streakDays}</AppText>
+            </View>
+            <View style={styles.statChip}>
+              <Ionicons name="flash" size={16} color={colors.primary} />
+              <AppText variant="bodyStrong">{stats.xp}</AppText>
+            </View>
           </View>
         </View>
-        <View style={styles.stats}>
-          <View style={styles.statChip}>
-            <StreakFlame active={stats.streakDays > 0} />
-            <AppText variant="bodyStrong">{stats.streakDays}</AppText>
-          </View>
-          <View style={styles.statChip}>
-            <Ionicons name="flash" size={16} color={colors.primary} />
-            <AppText variant="bodyStrong">{stats.xp}</AppText>
-          </View>
-        </View>
-      </View>
+
+      </Reveal>
 
       {/* Continue learning hero (whole card is tappable) */}
       {current && currentUnit && (
-        <PressableScale onPress={() => startLesson(current.id)} scaleTo={0.985} style={styles.hero} accessibilityRole="button" accessibilityLabel={`Continue: ${current.title}`}>
-          <View style={[styles.heroRing, { width: 220, height: 220, right: -70, top: -80 }]} />
-          <View style={[styles.heroRing, { width: 140, height: 140, right: -20, top: -30 }]} />
-          <AppText variant="label" color={colors.textOnPrimaryMuted}>
-            {stats.lessonsDone === 0 ? 'Start here' : 'Continue learning'} · Unit {currentUnit.index}
-          </AppText>
-          <AppText variant="title" color={colors.textOnPrimary}>
-            {current.title}
-          </AppText>
-          <AppText variant="caption" color={colors.textOnPrimaryMuted}>
-            {currentUnit.title} · {current.minutes} min · +{current.xp} XP
-          </AppText>
-          <ProgressBar value={unitProgress} color={colors.accent} trackColor={colors.primaryMuted} style={styles.heroProgress} />
-          <View style={styles.heroFooter}>
-            <AppText variant="caption" color={colors.textOnPrimaryMuted}>
-              {Math.round(unitProgress * 100)}% of unit complete
+        <Reveal index={1}>
+          <PressableScale onPress={() => startLesson(current.id)} scaleTo={0.985} style={styles.hero} accessibilityRole="button" accessibilityLabel={`Continue: ${current.title}`}>
+            <View style={[styles.heroRing, { width: 220, height: 220, right: -70, top: -80 }]} />
+            <View style={[styles.heroRing, { width: 140, height: 140, right: -20, top: -30 }]} />
+            <AppText variant="label" color={colors.textOnPrimaryMuted}>
+              {stats.lessonsDone === 0 ? 'Start here' : 'Continue learning'} · Unit {currentUnit.index}
             </AppText>
-            <View style={styles.heroCta}>
-              <Ionicons name="play" size={14} color={colors.primary} />
-              <AppText variant="caption" color={colors.primary} style={styles.heroCtaText}>
-                {stats.lessonsDone === 0 ? 'Start' : 'Continue'}
+            <AppText variant="title" color={colors.textOnPrimary}>
+              {current.title}
+            </AppText>
+            <AppText variant="caption" color={colors.textOnPrimaryMuted}>
+              {currentUnit.title} · {current.minutes} min · +{current.xp} XP
+            </AppText>
+            <ProgressBar value={unitProgress} color={colors.accent} trackColor={colors.primaryMuted} style={styles.heroProgress} />
+            <View style={styles.heroFooter}>
+              <AppText variant="caption" color={colors.textOnPrimaryMuted}>
+                {Math.round(unitProgress * 100)}% of unit complete
               </AppText>
+              <View style={styles.heroCta}>
+                <Ionicons name="play" size={14} color={colors.primary} />
+                <AppText variant="caption" color={colors.primary} style={styles.heroCtaText}>
+                  {stats.lessonsDone === 0 ? 'Start' : 'Continue'}
+                </AppText>
+              </View>
             </View>
-          </View>
-        </PressableScale>
+          </PressableScale>
+        </Reveal>
       )}
       {!current && units.length > 0 && (
-        <View style={styles.hero}>
-          <View style={[styles.heroRing, { width: 220, height: 220, right: -70, top: -80 }]} />
-          <View style={styles.doneMedal}>
-            <Ionicons name="trophy" size={26} color={colors.primary} />
+        <Reveal index={1}>
+          <View style={styles.hero}>
+            <View style={[styles.heroRing, { width: 220, height: 220, right: -70, top: -80 }]} />
+            <View style={styles.doneMedal}>
+              <Ionicons name="trophy" size={26} color={colors.primary} />
+            </View>
+            <AppText variant="title" color={colors.textOnPrimary}>
+              Path complete!
+            </AppText>
+            <AppText variant="caption" color={colors.textOnPrimaryMuted}>
+              You’ve finished every lesson. Review any lesson below to sharpen your score — new units are on the way.
+            </AppText>
           </View>
-          <AppText variant="title" color={colors.textOnPrimary}>
-            Path complete!
-          </AppText>
-          <AppText variant="caption" color={colors.textOnPrimaryMuted}>
-            You’ve finished every lesson. Review any lesson below to sharpen your score — new units are on the way.
-          </AppText>
-        </View>
+        </Reveal>
       )}
       {path.isPending && !path.data && <HeroSkeleton />}
 
       {/* Personalised plan strip */}
-      <View style={styles.planStrip}>
-        <Badge tone="accent" icon={plan.icon} label={plan.headline} />
-        <Badge icon={level.icon} label={level.label} />
-      </View>
+      <Reveal index={2}>
+        <View style={styles.planStrip}>
+          <Badge tone="accent" icon={plan.icon} label={plan.headline} />
+          <Badge icon={level.icon} label={level.label} />
+        </View>
+      </Reveal>
 
       {level.value !== 'beginner' && (
-        <PressableScale onPress={() => setPlacementOpen(true)} style={styles.placement}>
-          <Ionicons name="flash-outline" size={18} color={colors.primary} />
-          <AppText variant="caption" color={colors.text} style={styles.flex}>
-            Know the basics already? Take a 2-minute placement check to skip ahead.
-          </AppText>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </PressableScale>
+        <Reveal index={3}>
+          <PressableScale onPress={() => setPlacementOpen(true)} style={styles.placement}>
+            <Ionicons name="flash-outline" size={18} color={colors.primary} />
+            <AppText variant="caption" color={colors.text} style={styles.flex}>
+              Know the basics already? Take a 2-minute placement check to skip ahead.
+            </AppText>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </PressableScale>
+        </Reveal>
       )}
 
       {/* Daily goal + level */}
-      <View style={styles.tiles}>
-        <Card elevated style={[styles.goalTile, goalDone && styles.goalDone]}>
-          <View style={styles.tileHead}>
-            <AppText variant="label" color={goalDone ? colors.success : colors.textMuted}>
-              Daily goal
-            </AppText>
-            <Ionicons name={goalDone ? 'checkmark-circle' : 'trophy-outline'} size={18} color={goalDone ? colors.success : colors.textMuted} />
-          </View>
-          <AppText variant="heading">
-            {stats.todayXp}
-            <AppText variant="caption"> / {stats.dailyGoalXp} XP</AppText>
-          </AppText>
-          <ProgressBar value={stats.dailyGoalXp > 0 ? stats.todayXp / stats.dailyGoalXp : 0} color={goalDone ? colors.success : colors.primary} />
-          <AppText variant="caption" color={goalDone ? colors.success : colors.textMuted}>
-            {goalDone ? 'Goal reached — nice!' : `${stats.dailyGoalXp - stats.todayXp} XP to go today`}
-          </AppText>
-        </Card>
-        <Card elevated style={styles.smallTile}>
-          <View style={styles.tileHead}>
-            <AppText variant="label">Level</AppText>
-            <View style={styles.lvlBadge}>
-              <AppText variant="caption" color={colors.accent} style={styles.lvlText}>
-                {lvl.level}
+      <Reveal index={4}>
+        <View style={styles.tiles}>
+          <Card elevated style={[styles.goalTile, goalDone && styles.goalDone]}>
+            <View style={styles.tileHead}>
+              <AppText variant="label" color={goalDone ? colors.success : colors.textMuted}>
+                Daily goal
               </AppText>
+              <Ionicons name={goalDone ? 'checkmark-circle' : 'trophy-outline'} size={18} color={goalDone ? colors.success : colors.textMuted} />
             </View>
-          </View>
-          <AppText variant="bodyStrong" numberOfLines={1}>
-            {lvl.title}
-          </AppText>
-          <ProgressBar value={lvl.progress} color={colors.accent} />
-          <AppText variant="caption">{lvl.toNext} XP to next</AppText>
-        </Card>
-      </View>
+            <AppText variant="heading">
+              {stats.todayXp}
+              <AppText variant="caption"> / {stats.dailyGoalXp} XP</AppText>
+            </AppText>
+            <ProgressBar value={stats.dailyGoalXp > 0 ? stats.todayXp / stats.dailyGoalXp : 0} color={goalDone ? colors.success : colors.primary} />
+            <AppText variant="caption" color={goalDone ? colors.success : colors.textMuted}>
+              {goalDone ? 'Goal reached — nice!' : `${stats.dailyGoalXp - stats.todayXp} XP to go today`}
+            </AppText>
+          </Card>
+          <Card elevated style={styles.smallTile}>
+            <View style={styles.tileHead}>
+              <AppText variant="label">Level</AppText>
+              <View style={styles.lvlBadge}>
+                <AppText variant="caption" color={colors.accent} style={styles.lvlText}>
+                  {lvl.level}
+                </AppText>
+              </View>
+            </View>
+            <AppText variant="bodyStrong" numberOfLines={1}>
+              {lvl.title}
+            </AppText>
+            <ProgressBar value={lvl.progress} color={colors.accent} />
+            <AppText variant="caption">{lvl.toNext} XP to next</AppText>
+          </Card>
+        </View>
+      </Reveal>
 
       {/* Error + empty states — the rest of the screen stays usable. */}
       {path.isError && (
@@ -209,28 +223,37 @@ export function LearnScreen() {
 
       {/* Learning path */}
       {units.map((unit, unitIndex) => (
-        <View key={unit.id} style={styles.unit}>
-          {unitIndex === 0 && isPersonalized && <Badge tone="success" icon="sparkles" label="Recommended for your goal" />}
-          <View style={styles.unitHeader}>
-            <View style={styles.unitIndex}>
-              <AppText variant="bodyStrong" color={colors.accent}>
-                {unit.index}
-              </AppText>
+        <Reveal key={unit.id} index={5 + unitIndex}>
+          <View style={styles.unit}>
+            {unitIndex === 0 && isPersonalized && <Badge tone="success" icon="sparkles" label="Recommended for your goal" />}
+            <View style={styles.unitHeader}>
+              <View style={styles.unitIndex}>
+                <AppText variant="bodyStrong" color={colors.accent}>
+                  {unit.index}
+                </AppText>
+              </View>
+              <View style={styles.flex}>
+                <SectionHeader title={unit.title} />
+                <AppText variant="caption">{unit.description}</AppText>
+              </View>
             </View>
-            <View style={styles.flex}>
-              <SectionHeader title={unit.title} />
-              <AppText variant="caption">{unit.description}</AppText>
+            <View style={styles.path}>
+              {unit.lessons.map((lesson, i) => (
+                // Nodes cascade in one after another, like steps appearing on a trail.
+                <Reveal key={lesson.id} index={i} delay={180 + unitIndex * 120} offset={20}>
+                  <LessonNode lesson={lesson} offset={OFFSETS[nodeIndex++ % OFFSETS.length]} onPress={setSelected} />
+                </Reveal>
+              ))}
             </View>
           </View>
-          <View style={styles.path}>
-            {unit.lessons.map((lesson) => (
-              <LessonNode key={lesson.id} lesson={lesson} offset={OFFSETS[nodeIndex++ % OFFSETS.length]} onPress={setSelected} />
-            ))}
-          </View>
-        </View>
+        </Reveal>
       ))}
 
-      {path.data && <AchievementsRow stats={stats} />}
+      {path.data && (
+        <Reveal delay={200}>
+          <AchievementsRow stats={stats} />
+        </Reveal>
+      )}
 
       <LessonSheet lesson={selected} onClose={() => setSelected(null)} onStart={startLesson} onPractice={startPractice} />
       <Sheet visible={placementOpen} onClose={() => setPlacementOpen(false)} title="Placement check">
@@ -248,9 +271,9 @@ export function LearnScreen() {
 function HeroSkeleton() {
   return (
     <View style={[styles.hero, styles.skeletonHero]}>
-      <View style={[styles.skelLine, { width: '40%', backgroundColor: colors.primaryMuted }]} />
-      <View style={[styles.skelLine, { width: '75%', height: 24, backgroundColor: colors.primaryMuted }]} />
-      <View style={[styles.skelLine, { width: '100%', height: 10, marginTop: spacing.md, backgroundColor: colors.primaryMuted }]} />
+      <Skeleton tone="dark" width="40%" height={12} />
+      <Skeleton tone="dark" width="75%" height={24} />
+      <Skeleton tone="dark" height={10} style={{ marginTop: spacing.md }} />
     </View>
   );
 }
@@ -259,7 +282,7 @@ function PathSkeleton() {
   return (
     <View style={styles.path}>
       {[0, 56, 84, 56].map((x, i) => (
-        <View key={i} style={[styles.skelNode, { transform: [{ translateX: x }] }]} />
+        <Skeleton key={i} width={72} height={72} radius={36} style={{ transform: [{ translateX: x }] }} />
       ))}
     </View>
   );
@@ -392,6 +415,4 @@ const styles = StyleSheet.create({
   stateCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   stateIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   skeletonHero: { gap: spacing.sm, minHeight: 160 },
-  skelLine: { height: 12, borderRadius: 6 },
-  skelNode: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surfaceMuted },
 });

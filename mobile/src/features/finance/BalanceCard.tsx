@@ -51,6 +51,7 @@ export function BalanceCard({ balance, currency, hidden, changePct, onToggleHidd
       </View>
 
       <Amount
+        animate
         minor={balance}
         currency={currency}
         size={38}

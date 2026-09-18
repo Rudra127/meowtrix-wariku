@@ -1,6 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { motion } from '@/theme/motion';
 
 type Props = Omit<PressableProps, 'style'> & {
   style?: StyleProp<ViewStyle>;
@@ -24,7 +25,7 @@ export function PressableScale({
 }: Props) {
   const [scale] = useState(() => new Animated.Value(1));
   const springTo = (toValue: number) =>
-    Animated.spring(scale, { toValue, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
+    Animated.spring(scale, { toValue, useNativeDriver: true, ...motion.spring.press }).start();
 
   return (
     <Pressable

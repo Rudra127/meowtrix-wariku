@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatMessage } from '@/api/types';
+import { Reveal } from '@/components/motion';
 import { AppText, Button, IconButton, PressableScale, Screen, type IconName } from '@/components/ui';
 import { useBrokerages } from '@/features/finance/useFinance';
 import { DATA_SUGGESTIONS, HOLDINGS_SUGGESTION } from '@/features/onboarding/options';
@@ -85,7 +86,11 @@ export function ChatScreen() {
         keyExtractor={(_, i) => String(i)}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <Bubble message={item} />}
+        renderItem={({ item }) => (
+          <Reveal offset={10}>
+            <Bubble message={item} />
+          </Reveal>
+        )}
         ListEmptyComponent={<EmptyState onPick={onSend} suggestions={suggestions} />}
         ListFooterComponent={
           <>
@@ -153,23 +158,31 @@ export function ChatScreen() {
 function EmptyState({ onPick, suggestions }: { onPick: (text: string) => void; suggestions: { icon: IconName; text: string }[] }) {
   return (
     <View style={styles.empty}>
-      <AiOrb size={84} pulse />
-      <AppText variant="title" center style={styles.emptyTitle}>
-        How can I help with your money today?
-      </AppText>
-      <AppText variant="body" center color={colors.textMuted}>
-        Ask anything — budgeting, saving, loans, investing basics.
-      </AppText>
+      <Reveal>
+        <AiOrb size={84} pulse />
+      </Reveal>
+      <Reveal index={1}>
+        <AppText variant="title" center style={styles.emptyTitle}>
+          How can I help with your money today?
+        </AppText>
+      </Reveal>
+      <Reveal index={2}>
+        <AppText variant="body" center color={colors.textMuted}>
+          Ask anything — budgeting, saving, loans, investing basics.
+        </AppText>
+      </Reveal>
       <View style={styles.grid}>
-        {suggestions.map((s) => (
-          <PressableScale key={s.text} onPress={() => onPick(s.text)} containerStyle={styles.suggestionWrap} style={[styles.suggestion, shadow.card]}>
-            <View style={styles.suggestionIcon}>
-              <Ionicons name={s.icon} size={18} color={colors.primary} />
-            </View>
-            <AppText variant="caption" color={colors.text} style={styles.suggestionText}>
-              {s.text}
-            </AppText>
-          </PressableScale>
+        {suggestions.map((s, i) => (
+          <Reveal key={s.text} index={3 + i} style={styles.suggestionWrap}>
+            <PressableScale onPress={() => onPick(s.text)} style={[styles.suggestion, shadow.card]}>
+              <View style={styles.suggestionIcon}>
+                <Ionicons name={s.icon} size={18} color={colors.primary} />
+              </View>
+              <AppText variant="caption" color={colors.text} style={styles.suggestionText}>
+                {s.text}
+              </AppText>
+            </PressableScale>
+          </Reveal>
         ))}
       </View>
     </View>

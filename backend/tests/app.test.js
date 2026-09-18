@@ -31,6 +31,7 @@ describe("auth guard", () => {
     ["post", "/api/v1/auth/sync"],
     ["patch", "/api/v1/users/me"],
     ["delete", "/api/v1/users/me"],
+    ["put", "/api/v1/users/me/onboarding"],
     ["get", "/api/v1/admin/users"],
     ["post", "/api/v1/ai/chat"],
   ]) {

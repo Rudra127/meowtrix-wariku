@@ -1,6 +1,7 @@
 // @file backend/services/user-service.js
 // Business logic for users. Throws AppErrors; returns plain data.
 import { clerkClient } from "@clerk/express";
+import { GOALS, LEVELS } from "../database/models/user.js";
 import UserRepository, {
   fieldsFromClerkUser,
   fieldsFromClerkWebhook,
@@ -10,9 +11,12 @@ import { NotFoundError, ValidationError } from "../utils/index.js";
 // Fields a user may change on their own profile via PATCH /users/me.
 // Name/email/avatar are owned by Clerk — change them in the app through Clerk's `user.update()`,
 // and the `user.updated` webhook (or the next first-login sync) mirrors them here.
+const isCurrency = (v) => typeof v === "string" && /^[A-Za-z]{3}$/.test(v);
 const SELF_EDITABLE = {
   isOnboarded: (v) => typeof v === "boolean",
-  currency: (v) => typeof v === "string" && /^[A-Za-z]{3}$/.test(v),
+  currency: isCurrency,
+  level: (v) => LEVELS.includes(v),
+  goal: (v) => GOALS.includes(v),
 };
 
 export default class UserService {
@@ -53,6 +57,29 @@ export default class UserService {
     }
 
     const user = await this.repository.updateByClerkId(clerkId, updates);
+    if (!user) throw new NotFoundError("User not found");
+    return user;
+  }
+
+  /**
+   * Saves the onboarding questionnaire and marks the user onboarded.
+   * Body: { level, goal, currency? } — level/goal drive personalisation across the app.
+   */
+  async completeOnboarding(clerkId, body = {}) {
+    const { level, goal, currency } = body;
+    const invalid = {};
+    if (!LEVELS.includes(level)) invalid.level = `Must be one of: ${LEVELS.join(", ")}`;
+    if (!GOALS.includes(goal)) invalid.goal = `Must be one of: ${GOALS.join(", ")}`;
+    if (currency !== undefined && !isCurrency(currency)) invalid.currency = "Must be a 3-letter ISO code";
+    if (Object.keys(invalid).length) throw new ValidationError("Invalid onboarding answers", invalid);
+
+    const user = await this.repository.updateByClerkId(clerkId, {
+      level,
+      goal,
+      ...(currency && { currency: currency.toUpperCase() }),
+      isOnboarded: true,
+      onboardedAt: new Date(),
+    });
     if (!user) throw new NotFoundError("User not found");
     return user;
   }

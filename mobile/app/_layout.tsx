@@ -1,8 +1,9 @@
 /**
  * Root layout — providers + the single place where auth decides what the user can see.
  *
- *   signed out → (auth) group: sign-in, sign-up, forgot-password
- *   signed in  → (tabs) group: Learn, Money, Ask AI, Profile
+ *   signed out                → (auth) group: sign-in, sign-up, forgot-password
+ *   signed in, not onboarded  → (onboarding): level + goal questionnaire
+ *   signed in, onboarded      → (tabs) group: Learn, Money, Ask AI, Profile
  *
  * `Stack.Protected` swaps groups automatically whenever Clerk's session changes, so screens
  * never need to navigate after sign-in/sign-out themselves.
@@ -23,8 +24,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { queryClient } from '@/api/queryClient';
-import { BrandMark } from '@/features/auth/BrandMark';
 import { CLERK_PUBLISHABLE_KEY } from '@/config/env';
+import { BrandMark } from '@/features/auth/BrandMark';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { colors, spacing } from '@/theme';
 
 export default function RootLayout() {
@@ -60,12 +62,20 @@ function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
     }
   }, [userId]);
 
-  if (!isLoaded || !fontsLoaded) return <Splash />;
+  // Backend user decides onboarding. If the backend is unreachable we don't block the app —
+  // users land in the tabs (Profile shows the connection error) and see onboarding next time.
+  const me = useCurrentUser();
+  const needsOnboarding = !!isSignedIn && me.data?.isOnboarded === false;
+
+  if (!isLoaded || !fontsLoaded || (isSignedIn && me.isLoading)) return <Splash />;
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-      <Stack.Protected guard={!!isSignedIn}>
+      <Stack.Protected guard={!!isSignedIn && !needsOnboarding}>
         <Stack.Screen name="(tabs)" />
+      </Stack.Protected>
+      <Stack.Protected guard={needsOnboarding}>
+        <Stack.Screen name="(onboarding)" />
       </Stack.Protected>
       <Stack.Protected guard={!isSignedIn}>
         <Stack.Screen name="(auth)" />

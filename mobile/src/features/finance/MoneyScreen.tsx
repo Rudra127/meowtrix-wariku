@@ -2,11 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Amount, AppText, Badge, Button, Card, IconButton, ProgressBar, Screen, SectionHeader, Sheet, type IconName } from '@/components/ui';
+import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { formatMoney } from '@/lib/format';
 import { colors, radius, spacing } from '@/theme';
 import { AddTransactionSheet } from './AddTransactionSheet';
 import { BalanceCard } from './BalanceCard';
+import { FocusCard } from './FocusCard';
 import { monthName } from './dates';
 import { budgets, categories, openingBalance, sampleTransactions, summary, type Transaction } from './sampleData';
 import { SpendingChart } from './SpendingChart';
@@ -22,6 +24,7 @@ const COMING_SOON: Record<string, { title: string; body: string; icon: IconName 
 
 export function MoneyScreen() {
   const currency = useCurrentUser().data?.currency ?? 'INR';
+  const { plan } = usePersonalization();
   const [transactions, setTransactions] = useState<Transaction[]>(sampleTransactions);
   const [hidden, setHidden] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -57,6 +60,9 @@ export function MoneyScreen() {
         onToggleHidden={() => setHidden((h) => !h)}
         onAction={onAction}
       />
+
+      {/* Goal from onboarding decides what leads the dashboard */}
+      <FocusCard focus={plan.moneyFocus} currency={currency} hidden={hidden} />
 
       <Badge label="Preview · sample data, changes stay on this device" icon="construct-outline" />
 

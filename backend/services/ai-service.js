@@ -8,6 +8,20 @@ import { ValidationError } from "../utils/index.js";
 export const MAX_MESSAGES = 40;
 export const MAX_CONTENT_LENGTH = 4000;
 
+const LEVEL_GUIDANCE = {
+  beginner: "They are a beginner: avoid jargon, define any term you use, and use everyday examples.",
+  intermediate: "They know the basics: be concise, you can use common terms like SIP, APR or index fund.",
+  advanced: "They are experienced: be precise and quantitative, discuss trade-offs, skip the basics.",
+};
+
+const GOAL_FOCUS = {
+  budgeting: "controlling spending and sticking to a budget",
+  saving: "building savings and an emergency fund",
+  debt: "paying off debt",
+  investing: "starting and growing investments",
+  learning: "learning personal-finance fundamentals",
+};
+
 export const buildSystemPrompt = (user) =>
   [
     "You are Wariku's personal-finance assistant inside a mobile app that teaches money skills.",
@@ -17,7 +31,11 @@ export const buildSystemPrompt = (user) =>
     "suggest consulting a qualified professional for binding decisions. Never invent facts,",
     "prices or regulations; say when you are unsure. Keep answers under 250 words unless asked.",
     `The user's name is ${user.firstName || "there"} and their preferred currency is ${user.currency || "INR"}.`,
-  ].join(" ");
+    user.level ? LEVEL_GUIDANCE[user.level] : "",
+    user.goal ? `Their main goal is ${GOAL_FOCUS[user.goal]}; connect advice to it when relevant.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
 /** Validates client-supplied chat history. Clients may only send user/assistant turns. */
 export const validateMessages = (messages) => {

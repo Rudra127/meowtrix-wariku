@@ -1,12 +1,13 @@
 import { useUser } from '@clerk/expo';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { AppText, Avatar, Badge, Button, Card, ProgressBar, Screen, SectionHeader, Sheet } from '@/components/ui';
+import { AppText, Avatar, Badge, Button, Card, PressableScale, ProgressBar, Screen, SectionHeader, Sheet } from '@/components/ui';
+import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { greeting } from '@/lib/format';
 import { colors, radius, spacing } from '@/theme';
 import { LessonNode } from './LessonNode';
-import { learnerStats, units, type Lesson } from './sampleData';
+import { learnerStats, personalizePath, units as allUnits, type Lesson } from './sampleData';
 
 // Zig-zag horizontal offsets for the path, Duolingo style.
 const OFFSETS = [0, 56, 84, 56, 0, -56, -84, -56];
@@ -14,6 +15,10 @@ const OFFSETS = [0, 56, 84, 56, 0, -56, -84, -56];
 export function LearnScreen() {
   const { user } = useUser();
   const [selected, setSelected] = useState<Lesson | null>(null);
+  const [placementOpen, setPlacementOpen] = useState(false);
+  const { plan, level } = usePersonalization();
+  // Recommended unit (from the onboarding goal) goes first and holds the current lesson.
+  const units = useMemo(() => personalizePath(allUnits, plan.learnUnitId), [plan.learnUnitId]);
   const current = units.flatMap((u) => u.lessons).find((l) => l.status === 'current');
   const currentUnit = units.find((u) => u.lessons.some((l) => l.id === current?.id));
   const unitProgress = currentUnit
@@ -70,6 +75,22 @@ export function LearnScreen() {
         </View>
       )}
 
+      {/* Personalised plan strip */}
+      <View style={styles.planStrip}>
+        <Badge tone="accent" icon={plan.icon} label={plan.headline} />
+        <Badge icon={level.icon} label={level.label} />
+      </View>
+
+      {level.value !== 'beginner' && (
+        <PressableScale onPress={() => setPlacementOpen(true)} style={styles.placement}>
+          <Ionicons name="flash-outline" size={18} color={colors.primary} />
+          <AppText variant="caption" color={colors.text} style={styles.flex}>
+            Know the basics already? Take a 2-minute placement check to skip ahead.
+          </AppText>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </PressableScale>
+      )}
+
       {/* Daily goal + stats */}
       <View style={styles.tiles}>
         <Card style={styles.goalTile}>
@@ -93,8 +114,9 @@ export function LearnScreen() {
       <Badge label="Preview · sample lessons" icon="construct-outline" />
 
       {/* Learning path */}
-      {units.map((unit) => (
+      {units.map((unit, unitIndex) => (
         <View key={unit.id} style={styles.unit}>
+          {unitIndex === 0 && <Badge tone="success" icon="sparkles" label="Recommended for your goal" />}
           <View style={styles.unitHeader}>
             <View style={styles.unitIndex}>
               <AppText variant="bodyStrong" color={colors.accent}>
@@ -115,6 +137,13 @@ export function LearnScreen() {
       ))}
 
       <LessonSheet lesson={selected} onClose={() => setSelected(null)} />
+      <Sheet visible={placementOpen} onClose={() => setPlacementOpen(false)} title="Placement check">
+        <AppText variant="body" color={colors.textMuted}>
+          A short quiz that unlocks lessons you already know, so {level.label.toLowerCase()} learners don’t repeat the basics.
+        </AppText>
+        <Badge label="Coming soon" tone="accent" icon="sparkles" />
+        <Button title="Got it" variant="secondary" onPress={() => setPlacementOpen(false)} />
+      </Sheet>
     </Screen>
   );
 }
@@ -184,6 +213,15 @@ const styles = StyleSheet.create({
   heroProgress: { marginTop: spacing.md },
   heroFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm },
   tiles: { flexDirection: 'row', gap: spacing.md },
+  planStrip: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  placement: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
   goalTile: { flex: 1.4 },
   smallTile: { flex: 1 },
   tileHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

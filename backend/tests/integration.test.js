@@ -45,6 +45,21 @@ describe("authenticated flow (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not s
     assert.equal(res.body.data.user.role, "user");
   });
 
+  it("PUT /users/me/onboarding completes onboarding", async () => {
+    const before = await request(app).get("/api/v1/auth/me").set(auth());
+    assert.equal(before.body.data.user.isOnboarded, false);
+    const res = await request(app)
+      .put("/api/v1/users/me/onboarding")
+      .set(auth())
+      .send({ level: "intermediate", goal: "budgeting" });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.user.isOnboarded, true);
+    assert.equal(res.body.data.user.level, "intermediate");
+    assert.equal(res.body.data.user.goal, "budgeting");
+    const bad = await request(app).put("/api/v1/users/me/onboarding").set(auth()).send({ level: "x" });
+    assert.equal(bad.status, 400);
+  });
+
   it("admin route → 403 for a normal user", async () => {
     const res = await request(app).get("/api/v1/admin/users").set(auth());
     assert.equal(res.status, 403);

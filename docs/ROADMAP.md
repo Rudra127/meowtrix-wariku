@@ -100,8 +100,8 @@ regulated advice). Per-user rate limit 20 req/min.
 
 ## Cross-cutting
 
-- **Onboarding:** after first sign-in, ask goals + currency; save with `PATCH /api/v1/users/me`
-  (`isOnboarded`, `currency`) and route un-onboarded users to an onboarding stack.
+- **Onboarding:** ✅ done — level + goal questionnaire (`PUT /api/v1/users/me/onboarding`) personalises
+  Learn/Money/Ask AI. Next: add currency and monthly income questions; use `goal` to seed default budgets.
 - **Notifications:** streak reminders (expo-notifications + a scheduler on the backend).
 - **Analytics & crash reporting:** add before beta.
 - **Dark mode:** add a dark palette in `mobile/src/theme/index.ts`.

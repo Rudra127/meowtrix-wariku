@@ -1,4 +1,4 @@
-import { useClerk, useUser } from '@clerk/expo';
+import { useAuth, useClerk, useUser } from '@clerk/expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
@@ -6,10 +6,14 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Switch, View } from 'react-native';
 import { usersApi } from '@/api/endpoints';
 import { queryKeys } from '@/api/queryClient';
+import type { Goal, Level, User } from '@/api/types';
 import { useApi } from '@/api/useApi';
 import { AppText, Avatar, Badge, Button, Card, FormError, PressableScale, Screen, SectionHeader, Sheet } from '@/components/ui';
 import { API_URL } from '@/config/env';
 import { learnerStats } from '@/features/learn/sampleData';
+import { GOAL_OPTIONS, LEVEL_OPTIONS } from '@/features/onboarding/options';
+import { OptionCard } from '@/features/onboarding/OptionCard';
+import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getErrorMessage } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
@@ -26,17 +30,29 @@ const CURRENCIES = [
 export function ProfileScreen() {
   const { user } = useUser(); // identity, straight from Clerk
   const { signOut } = useClerk();
+  const { userId } = useAuth();
   const backendUser = useCurrentUser(); // our Mongo record, via the backend
   const api = useApi();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [notifications, setNotifications] = useState(true); // placeholder until push is wired
+  const [editing, setEditing] = useState<'level' | 'goal' | null>(null);
+  const { level, plan } = usePersonalization();
+
+  const updatePlan = useMutation({
+    mutationFn: (updates: { level?: Level; goal?: Goal }) => usersApi.updateMe(api, updates),
+    onSuccess: ({ user: updated }: { user: User }) => {
+      queryClient.setQueryData([...queryKeys.me, userId], updated); // every tab re-personalises instantly
+      setEditing(null);
+    },
+    onError: (err) => setError(getErrorMessage(err)),
+  });
 
   const updateCurrency = useMutation({
     mutationFn: (currency: string) => usersApi.updateMe(api, { currency }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.me });
+    onSuccess: ({ user: updated }: { user: User }) => {
+      queryClient.setQueryData([...queryKeys.me, userId], updated);
       setCurrencyOpen(false);
     },
     onError: (err) => setError(getErrorMessage(err)),
@@ -95,6 +111,12 @@ export function ProfileScreen() {
 
       <FormError message={error} />
 
+      <SectionHeader title="Your plan" />
+      <Card elevated style={styles.list}>
+        <SettingsRow icon={plan.icon} label="Main goal" value={plan.label} onPress={() => setEditing('goal')} />
+        <SettingsRow icon={level.icon} label="Experience level" value={level.label} onPress={() => setEditing('level')} />
+      </Card>
+
       <SectionHeader title="Preferences" />
       <Card elevated style={styles.list}>
         <SettingsRow icon="cash-outline" label="Currency" value={`${currency} ${currencySymbol(currency).trim()}`} onPress={() => setCurrencyOpen(true)} />
@@ -141,6 +163,27 @@ export function ProfileScreen() {
       <AppText variant="caption" center color={colors.textSubtle}>
         Wariku v{Constants.expoConfig?.version ?? '1.0.0'}
       </AppText>
+
+      <Sheet visible={!!editing} onClose={() => setEditing(null)} title={editing === 'goal' ? 'Main goal' : 'Experience level'}>
+        <View style={styles.currencyList}>
+          {editing === 'level' &&
+            LEVEL_OPTIONS.map((o) => (
+              <OptionCard key={o.value} {...o} selected={o.value === level.value} onPress={() => updatePlan.mutate({ level: o.value })} />
+            ))}
+          {editing === 'goal' &&
+            GOAL_OPTIONS.map((o) => (
+              <OptionCard
+                key={o.value}
+                icon={o.icon}
+                label={o.label}
+                description={o.description}
+                selected={o.value === plan.value}
+                onPress={() => updatePlan.mutate({ goal: o.value })}
+              />
+            ))}
+          {updatePlan.isPending && <ActivityIndicator color={colors.primary} />}
+        </View>
+      </Sheet>
 
       <Sheet visible={currencyOpen} onClose={() => setCurrencyOpen(false)} title="Currency">
         <View style={styles.currencyList}>

@@ -4,6 +4,11 @@
 // Link other collections to users via `userId: { type: ObjectId, ref: "User" }` (i.e. this doc's _id).
 import mongoose from "mongoose";
 
+// Onboarding answers — they personalise the app (dashboard focus, lesson path, AI tone).
+// Keep in sync with mobile/src/features/onboarding/options.ts.
+export const LEVELS = ["beginner", "intermediate", "advanced"];
+export const GOALS = ["budgeting", "saving", "debt", "investing", "learning"];
+
 const userSchema = new mongoose.Schema(
   {
     clerkId: { type: String, required: true, unique: true, index: true },
@@ -16,6 +21,9 @@ const userSchema = new mongoose.Schema(
 
     // App-level profile. Extend here as features land (see docs/ROADMAP.md).
     isOnboarded: { type: Boolean, default: false },
+    onboardedAt: { type: Date, default: null },
+    level: { type: String, enum: LEVELS, default: null },
+    goal: { type: String, enum: GOALS, default: null },
     currency: { type: String, trim: true, uppercase: true, default: "INR", maxlength: 3 },
   },
   {

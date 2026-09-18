@@ -31,7 +31,8 @@ mobile/
 │   ├── _layout.tsx             Fonts (Manrope), providers (Clerk, React Query), Stack.Protected auth guard
 │   ├── sso-callback.tsx        OAuth deep-link landing route
 │   ├── (auth)/                 Signed-out only: sign-in, sign-up, forgot-password
-│   └── (tabs)/                 Signed-in only: index (Learn), money, ask (Ask AI), profile
+│   ├── (onboarding)/           Signed-in, not yet onboarded: level + goal questionnaire
+│   └── (tabs)/                 Signed-in + onboarded: index (Learn), money, ask (Ask AI), profile
 ├── src/
 │   ├── api/                    client.ts (fetch + Bearer token), useApi.ts, endpoints.ts, types.ts, queryClient.ts
 │   ├── config/env.ts           ALL env access (EXPO_PUBLIC_*) + API URL resolution
@@ -41,7 +42,8 @@ mobile/
 │   │   ├── learn/              LearnScreen, LessonNode, sampleData.ts  ← placeholder content
 │   │   ├── finance/            MoneyScreen, BalanceCard, SpendingChart, AddTransactionSheet, sampleData.ts ← placeholder
 │   │   ├── chat/               ChatScreen, useChat, MessageContent (mini markdown), AiOrb, TypingDots
-│   │   └── profile/            ProfileScreen, SettingsRow
+│   │   ├── onboarding/         OnboardingScreen, OptionCard, options.ts (questions + per-goal plans), usePersonalization
+│   │   └── profile/            ProfileScreen, SettingsRow (edit goal/level/currency)
 │   ├── components/
 │   │   ├── ui/                 Design system — ALWAYS reuse these (see below)
 │   │   └── navigation/         FloatingTabBar (custom pill tab bar)
@@ -79,7 +81,7 @@ Import from `src` with the `@/` alias (`import { Button } from '@/components/ui'
 
 - `app/_layout.tsx` wraps everything in `<ClerkProvider publishableKey tokenCache>`; `tokenCache` is
   `expo-secure-store`, so sessions survive restarts.
-- Navigation is decided **only** by `Stack.Protected` guards on `isSignedIn`. Auth screens never call
+- Navigation is decided **only** by `Stack.Protected` guards (`isSignedIn`, then `isOnboarded`). Auth screens never call
   `router.replace('/')` after success — they call `finalize()` / `setActive()` and the guard swaps the stack.
   Signing out anywhere (`useClerk().signOut()`) returns to sign-in automatically.
 - Hooks are the **Core 3** API. Pattern:
@@ -96,6 +98,18 @@ Import from `src` with the `@/` alias (`import { Button } from '@/components/ui'
   when a user signs in from a new device). Other second factors show an explanatory error.
 - Google uses `useSSO()` from `@clerk/expo` (browser-based OAuth, works in Expo Go).
 - Dashboard setup and troubleshooting: [`docs/AUTH.md`](../docs/AUTH.md).
+
+## Onboarding & personalisation
+
+- After sign-in the root layout loads the backend user (`GET /auth/me`). `isOnboarded === false` → the
+  `(onboarding)` group; otherwise `(tabs)`. If the backend is unreachable, users go to the tabs (not blocked).
+- Questions: **level** (beginner / intermediate / advanced) and **main goal** (budgeting / saving / debt /
+  investing / learning). Saved with `PUT /users/me/onboarding`; editable later in Profile (`PATCH /users/me`).
+- `usePersonalization()` → `{ level, plan }`. `plan` (from `features/onboarding/options.ts`) decides:
+  Learn → recommended unit first (`learnUnitId`), Money → focus card (`moneyFocus`), Ask AI → starter prompts
+  (`aiSuggestions`). The backend also tunes the AI's tone/focus from `level`/`goal` (`services/ai-service.js`).
+- To add a goal: add it to `GOALS` in `backend/database/models/user.js`, `Goal` in `src/api/types.ts`, and a
+  `GoalPlan` entry in `options.ts` (+ a `FocusCard` case and `GOAL_FOCUS` text in the AI service).
 
 ## Calling the backend
 

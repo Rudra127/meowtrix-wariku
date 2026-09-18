@@ -4,6 +4,9 @@ export type ApiSuccess<T> = { success: true; data: T };
 export type ApiFailure = { success: false; error: { code: string; message: string; details?: unknown } };
 export type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure;
 
+export type Level = 'beginner' | 'intermediate' | 'advanced';
+export type Goal = 'budgeting' | 'saving' | 'debt' | 'investing' | 'learning';
+
 export type User = {
   id: string;
   clerkId: string;
@@ -13,6 +16,9 @@ export type User = {
   imageUrl: string;
   role: 'user' | 'admin';
   isOnboarded: boolean;
+  onboardedAt: string | null;
+  level: Level | null;
+  goal: Goal | null;
   currency: string;
   createdAt: string;
   updatedAt: string;

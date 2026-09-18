@@ -64,3 +64,33 @@ describe("Clerk → local field mapping", () => {
     assert.equal(fields.email, "a@x.com");
   });
 });
+
+describe("UserService.completeOnboarding", () => {
+  it("saves level + goal and marks the user onboarded", async () => {
+    const repo = fakeRepo();
+    await new UserService(repo).completeOnboarding("user_1", { level: "beginner", goal: "saving", currency: "usd" });
+    const { updates } = repo.calls[0];
+    assert.equal(updates.level, "beginner");
+    assert.equal(updates.goal, "saving");
+    assert.equal(updates.currency, "USD");
+    assert.equal(updates.isOnboarded, true);
+    assert.ok(updates.onboardedAt instanceof Date);
+  });
+
+  it("rejects missing/unknown answers with per-field details", async () => {
+    const service = new UserService(fakeRepo());
+    await assert.rejects(service.completeOnboarding("user_1", { level: "guru", goal: "crypto" }), (err) => {
+      assert.equal(err.code, "VALIDATION_ERROR");
+      assert.ok(err.details.level && err.details.goal);
+      return true;
+    });
+    await assert.rejects(service.completeOnboarding("user_1", {}), { code: "VALIDATION_ERROR" });
+  });
+
+  it("PATCH /users/me can change level/goal later, but only to known values", async () => {
+    const repo = fakeRepo();
+    await new UserService(repo).updateMe("user_1", { level: "advanced", goal: "investing" });
+    assert.deepEqual(repo.calls[0].updates, { level: "advanced", goal: "investing" });
+    await assert.rejects(new UserService(fakeRepo()).updateMe("user_1", { goal: "lottery" }), { code: "VALIDATION_ERROR" });
+  });
+});

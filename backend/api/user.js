@@ -13,6 +13,12 @@ const user = (app) => {
     sendSuccess(res, { user: updated });
   });
 
+  // Onboarding questionnaire. Body: { level, goal, currency? } → sets isOnboarded.
+  app.put("/api/v1/users/me/onboarding", protect, async (req, res) => {
+    const updated = await service.completeOnboarding(req.user.clerkId, req.body);
+    sendSuccess(res, { user: updated });
+  });
+
   // Permanently delete the account (Clerk + Mongo). Required by App Store / Play Store policies.
   app.delete("/api/v1/users/me", protect, async (req, res) => {
     await service.deleteMe(req.user.clerkId);

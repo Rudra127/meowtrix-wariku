@@ -3,7 +3,7 @@
  * then wrap them in React Query hooks under src/hooks or src/features/<feature>/.
  */
 import type { ApiClient } from './client';
-import type { ChatMessage, ChatResponse, User } from './types';
+import type { ChatMessage, ChatResponse, Goal, Level, User } from './types';
 
 export const authApi = {
   /** Verifies the session and creates the backend user on first call. */
@@ -13,8 +13,11 @@ export const authApi = {
 };
 
 export const usersApi = {
-  updateMe: (api: ApiClient, updates: Partial<Pick<User, 'isOnboarded' | 'currency'>>) =>
+  updateMe: (api: ApiClient, updates: Partial<Pick<User, 'isOnboarded' | 'currency' | 'level' | 'goal'>>) =>
     api.patch<{ user: User }>('/users/me', updates),
+  /** Saves the onboarding questionnaire and sets isOnboarded = true. */
+  completeOnboarding: (api: ApiClient, answers: { level: Level; goal: Goal; currency?: string }) =>
+    api.put<{ user: User }>('/users/me/onboarding', answers),
   deleteMe: (api: ApiClient) => api.delete<{ deleted: true }>('/users/me'),
 };
 

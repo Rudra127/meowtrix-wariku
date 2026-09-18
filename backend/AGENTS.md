@@ -30,11 +30,11 @@ backend/
 │   └── webhooks.js           POST /webhooks/clerk (raw body, Svix-verified)
 ├── services/                 Business logic; throws AppErrors; returns plain data
 │   ├── user-service.js
-│   └── ai-service.js         System prompt + message validation for the finance assistant
+│   └── ai-service.js         System prompt (personalised by level/goal) + message validation
 ├── lib/deepseek.js           DeepSeek client (the only file that talks to the LLM provider)
 ├── database/
 │   ├── connection.js
-│   ├── models/user.js        The only model so far
+│   ├── models/user.js        The only model so far; exports LEVELS / GOALS (onboarding answers)
 │   └── repository/           ALL Mongoose queries live here
 ├── middlewares/
 │   ├── protect.js            Requires a Clerk session → sets req.user (Mongo doc)
@@ -82,7 +82,8 @@ All under `/api/v1`. All return the standard envelope.
 | GET | `/health` (no prefix) | — | — | `{ status, timestamp }` |
 | GET | `/auth/me` | protect | — | `{ user }` — creates the user on first call |
 | POST | `/auth/sync` | protect | — | `{ user }` — re-pulls profile from Clerk |
-| PATCH | `/users/me` | protect | `{ isOnboarded?: boolean, currency?: "USD" }` | `{ user }` — other fields ignored |
+| PATCH | `/users/me` | protect | `{ isOnboarded?, currency?: "USD", level?, goal? }` | `{ user }` — other fields ignored |
+| PUT | `/users/me/onboarding` | protect | `{ level, goal, currency? }` | `{ user }` — sets `isOnboarded`, `onboardedAt` |
 | DELETE | `/users/me` | protect | — | `{ deleted: true }` — deletes in Clerk **and** Mongo |
 | GET | `/admin/users` | protect + isAdmin | `?page&limit&search` | `{ items, total, page, limit, totalPages }` |
 | POST | `/ai/chat` | protect + aiLimiter | `{ messages: [{ role: "user"\|"assistant", content }] }` (≤40, last = user, ≤4000 chars each) | `{ message: { role, content }, model, usage }` |

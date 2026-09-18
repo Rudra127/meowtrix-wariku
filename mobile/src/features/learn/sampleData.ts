@@ -35,4 +35,43 @@ export const units: Unit[] = [
       { id: 'l8', title: 'Where to keep it', summary: 'Savings accounts vs liquid funds.', xp: 30, minutes: 5, icon: 'business', status: 'locked' },
     ],
   },
+  {
+    id: 'u3',
+    index: 3,
+    title: 'Debt & credit',
+    description: 'Borrow smart, repay faster.',
+    lessons: [
+      { id: 'l9', title: 'How interest works', summary: 'Why a 3% monthly rate is 42% a year.', xp: 20, minutes: 4, icon: 'calculator', status: 'locked' },
+      { id: 'l10', title: 'Snowball vs avalanche', summary: 'Two proven ways to clear debt.', xp: 30, minutes: 5, icon: 'layers', status: 'locked' },
+      { id: 'l11', title: 'Your credit score', summary: 'What moves it, and what doesn’t.', xp: 30, minutes: 5, icon: 'speedometer', status: 'locked' },
+    ],
+  },
+  {
+    id: 'u4',
+    index: 4,
+    title: 'Investing 101',
+    description: 'Make your money work for you.',
+    lessons: [
+      { id: 'l12', title: 'Risk and return', summary: 'The trade-off behind every investment.', xp: 20, minutes: 4, icon: 'pulse', status: 'locked' },
+      { id: 'l13', title: 'What is a SIP?', summary: 'Investing a little, every month.', xp: 30, minutes: 5, icon: 'repeat', status: 'locked' },
+      { id: 'l14', title: 'Index funds', summary: 'Own the whole market, cheaply.', xp: 30, minutes: 5, icon: 'grid', status: 'locked' },
+    ],
+  },
 ];
+
+/**
+ * Orders the path for the user's goal: recommended unit first, and exactly one "current" lesson —
+ * the first unfinished lesson of the recommended unit. Everything else unfinished is locked.
+ */
+export function personalizePath(all: Unit[], recommendedUnitId: string): Unit[] {
+  const rec = all.find((u) => u.id === recommendedUnitId) ?? all[0];
+  const ordered = [rec, ...all.filter((u) => u.id !== rec.id)];
+  const currentId = rec.lessons.find((l) => l.status !== 'done')?.id;
+  return ordered.map((u) => ({
+    ...u,
+    lessons: u.lessons.map((l) => ({
+      ...l,
+      status: l.status === 'done' ? 'done' : l.id === currentId ? 'current' : 'locked',
+    })),
+  }));
+}

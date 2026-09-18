@@ -53,6 +53,22 @@ describe("AIService.chat", () => {
   });
 });
 
+describe("buildSystemPrompt personalisation", () => {
+  it("adapts tone to level and mentions the goal", () => {
+    const beginner = buildSystemPrompt({ firstName: "A", currency: "INR", level: "beginner", goal: "debt" });
+    assert.match(beginner, /avoid jargon/);
+    assert.match(beginner, /paying off debt/);
+    const advanced = buildSystemPrompt({ firstName: "A", currency: "INR", level: "advanced", goal: "investing" });
+    assert.match(advanced, /quantitative/);
+    assert.doesNotMatch(advanced, /avoid jargon/);
+  });
+
+  it("works for users who haven't onboarded yet", () => {
+    const prompt = buildSystemPrompt({ firstName: "", currency: "INR" });
+    assert.doesNotMatch(prompt, /undefined/);
+  });
+});
+
 describe("createChatCompletion (DeepSeek client)", () => {
   const messages = [{ role: "user", content: "hi" }];
 

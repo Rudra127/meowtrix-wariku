@@ -5,6 +5,7 @@ import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatMessage } from '@/api/types';
 import { AppText, Button, IconButton, PressableScale, Screen, type IconName } from '@/components/ui';
+import { usePersonalization } from '@/features/onboarding/usePersonalization';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { getErrorMessage } from '@/lib/errors';
 import { colors, fonts, radius, shadow, spacing } from '@/theme';
@@ -13,15 +14,9 @@ import { MessageContent } from './MessageContent';
 import { TypingDots } from './TypingDots';
 import { useChat } from './useChat';
 
-const SUGGESTIONS: { icon: IconName; text: string }[] = [
-  { icon: 'pie-chart-outline', text: 'Help me build a monthly budget' },
-  { icon: 'umbrella-outline', text: 'How big should my emergency fund be?' },
-  { icon: 'trending-up-outline', text: 'Explain SIPs like I’m new to investing' },
-  { icon: 'card-outline', text: 'How do I pay off credit card debt fast?' },
-];
-
 export function ChatScreen() {
   const { messages, send, retry, reset, isSending, error } = useChat();
+  const { plan, level } = usePersonalization();
   const [input, setInput] = useState('');
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const insets = useSafeAreaInsets();
@@ -55,7 +50,7 @@ export function ChatScreen() {
             <AppText variant="heading">Wariku AI</AppText>
             <View style={styles.online}>
               <View style={styles.onlineDot} />
-              <AppText variant="caption">Your money coach</AppText>
+              <AppText variant="caption">Money coach · {level.label} mode</AppText>
             </View>
           </View>
         </View>
@@ -71,7 +66,7 @@ export function ChatScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => <Bubble message={item} />}
-        ListEmptyComponent={<EmptyState onPick={onSend} />}
+        ListEmptyComponent={<EmptyState onPick={onSend} suggestions={plan.aiSuggestions} />}
         ListFooterComponent={
           <>
             {isSending && (
@@ -126,7 +121,7 @@ export function ChatScreen() {
   );
 }
 
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+function EmptyState({ onPick, suggestions }: { onPick: (text: string) => void; suggestions: { icon: IconName; text: string }[] }) {
   return (
     <View style={styles.empty}>
       <AiOrb size={84} pulse />
@@ -137,7 +132,7 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
         Ask anything — budgeting, saving, loans, investing basics.
       </AppText>
       <View style={styles.grid}>
-        {SUGGESTIONS.map((s) => (
+        {suggestions.map((s) => (
           <PressableScale key={s.text} onPress={() => onPick(s.text)} containerStyle={styles.suggestionWrap} style={[styles.suggestion, shadow.card]}>
             <View style={styles.suggestionIcon}>
               <Ionicons name={s.icon} size={18} color={colors.primary} />

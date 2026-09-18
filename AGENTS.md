@@ -15,6 +15,8 @@ A mobile app that makes people better with money. Three main tabs:
 | **Ask AI** | `mobile/app/(tabs)/ask.tsx` | Finance chatbot on **DeepSeek**, answers questions about the user's own finances | Working chat (DeepSeek) |
 | Profile | `mobile/app/(tabs)/profile.tsx` | Account, backend-connection status, sign out, delete account | Done |
 
+First run: a 2-question onboarding (experience level + main goal) personalises every tab and the AI's tone.
+
 **What's done:** the skeleton. Clerk auth end-to-end (mobile ↔ backend), user sync into MongoDB, a typed
 API client, a DeepSeek client, a design system, and tab UIs (Learn/Money on sample data). **What's next:** the features — see `docs/ROADMAP.md`.
 

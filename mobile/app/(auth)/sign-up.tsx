@@ -116,7 +116,7 @@ export default function SignUpScreen() {
         secureTextEntry
         textContentType="newPassword"
         autoComplete="new-password"
-        placeholder="At least 8 characters"
+        placeholder="Use a long, unique password"
         error={errors.fields.password?.message}
         onSubmitEditing={onSignUp}
       />

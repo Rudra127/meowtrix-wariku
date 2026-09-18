@@ -8,9 +8,12 @@
  * amount silently entering someone's ledger is far worse than one confirmation tap. Every draft
  * arrives pre-selected, so confirming is a single press.
  *
- * expo-audio notes (SDK 57): `useAudioRecorder(options)` returns a recorder you must
- * `prepareToRecordAsync()` before `record()`. Recording also needs `setAudioModeAsync({
- * allowsRecording: true })` on iOS, otherwise `record()` silently produces nothing.
+ * expo-audio notes (SDK 57):
+ *   - `useAudioRecorder(options)` returns a recorder that must be prepared before `record()`, but
+ *     `stop()` leaves it prepared. Preparing again throws, so go through `prepareRecorder()` rather
+ *     than calling `prepareToRecordAsync()` directly.
+ *   - Recording needs `setAudioModeAsync({ allowsRecording: true })` on iOS, or `record()` silently
+ *     produces an empty file.
  */
 import {
   RecordingPresets,
@@ -19,6 +22,7 @@ import {
   setAudioModeAsync,
   useAudioRecorder,
   useAudioRecorderState,
+  type AudioRecorder,
   type RecordingOptions,
 } from 'expo-audio';
 import { useCallback, useMemo, useState } from 'react';
@@ -99,7 +103,7 @@ export function useVoiceCapture() {
 
       // iOS routes audio differently for playback vs recording; without this the file is empty.
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await recorder.prepareToRecordAsync(VOICE_RECORDING_OPTIONS);
+      await prepareRecorder(recorder);
       recorder.record();
       setStage('recording');
       return true;
@@ -232,6 +236,30 @@ export function useVoiceCapture() {
     reset,
     clearError: () => setError(null),
   };
+}
+
+/**
+ * Prepares the recorder for a take, but only when it actually needs it.
+ *
+ * `stop()` does not un-prepare the recorder, so calling `prepareToRecordAsync()` before every
+ * recording rejects on the second one with "Audio recorder is already prepared. Stop or release the
+ * current session before preparing again." `getStatus().canRecord` is the readiness flag, read
+ * synchronously from native state (the `useAudioRecorderState` poll can be up to 100ms stale).
+ *
+ * `mediaServicesDidReset` forces a re-prepare: iOS sets it when the system media daemon restarts,
+ * which invalidates the recorder even though it still looks prepared.
+ */
+async function prepareRecorder(recorder: AudioRecorder): Promise<void> {
+  const status = recorder.getStatus();
+  if (status.canRecord && !status.mediaServicesDidReset) return;
+
+  try {
+    await recorder.prepareToRecordAsync(VOICE_RECORDING_OPTIONS);
+  } catch (err) {
+    // Platforms disagree slightly on when `canRecord` flips. If the recorder ended up usable anyway,
+    // don't fail the take over it; only surface the error when it really can't record.
+    if (!recorder.getStatus().canRecord) throw err;
+  }
 }
 
 /**

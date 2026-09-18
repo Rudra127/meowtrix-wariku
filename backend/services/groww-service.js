@@ -23,6 +23,16 @@ import { ServiceUnavailableError } from "../utils/index.js";
 const TOKEN_SAFETY_MS = 60 * 1000;
 /** Holdings move with the market, but a single chat turn can ask several questions. */
 const PORTFOLIO_TTL_MS = 5 * 60 * 1000;
+/** Quotes cost one call each. Cap the fan-out so a large portfolio can't stall a chat turn. */
+const QUOTE_LIMIT = 30;
+/** Groww allows 10 live-data calls a second; stay comfortably under it. */
+const QUOTE_CONCURRENCY = 5;
+
+const chunk = (items, size) => {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+};
 
 export default class GrowwService {
   /** @param {typeof growwClient} [client] Injected in tests; defaults to the real lib/groww.js. */
@@ -99,24 +109,66 @@ export default class GrowwService {
    * Last traded prices for the given trading symbols. Best-effort: a failure returns whatever was
    * collected so far rather than sinking the whole portfolio read.
    *
+   * Two passes, because Groww's holdings don't say which exchange a stock trades on: everything is
+   * tried on NSE, then whatever came back without a price is retried on BSE. Without the second pass
+   * a BSE-only holding would silently show cost instead of market value.
+   *
    * @returns {Promise<{ prices: Record<string, number>, failed: boolean }>}
    */
   async #fetchPrices(symbols, accessToken) {
-    const exchangeSymbols = [...new Set(symbols)].map((s) => this.client.exchangeSymbolFor(s));
-    if (!exchangeSymbols.length) return { prices: {}, failed: false };
+    const unique = [...new Set(symbols)].filter(Boolean);
+    if (!unique.length) return { prices: {}, failed: false };
 
     const prices = {};
     let failed = false;
-    for (const batch of this.client.batchSymbols(exchangeSymbols)) {
-      try {
-        Object.assign(prices, await this.client.getLtp({ accessToken, exchangeSymbols: batch }));
-      } catch (err) {
-        // Common and not fatal: live data may not be on the subscription, or the market is closed.
-        failed = true;
-        console.warn(`[groww] price lookup failed for ${batch.length} symbols: ${err?.message}`);
+
+    const lookup = async (list, exchange) => {
+      for (const batch of this.client.batchSymbols(list.map((s) => this.client.exchangeSymbolFor(s, exchange)))) {
+        try {
+          Object.assign(prices, await this.client.getLtp({ accessToken, exchangeSymbols: batch }));
+        } catch (err) {
+          // Common and not fatal: live data may not be on the subscription, or the market is closed.
+          failed = true;
+          console.warn(`[groww] ${exchange} price lookup failed for ${batch.length} symbols: ${err?.message}`);
+        }
       }
-    }
+    };
+
+    await lookup(unique, "NSE");
+    const missing = unique.filter((s) => !prices[this.client.exchangeSymbolFor(s, "NSE")]);
+    if (missing.length) await lookup(missing, "BSE");
+
     return { prices, failed };
+  }
+
+  /**
+   * Today's move and the 52-week range per holding, from the quote endpoint.
+   *
+   * One call per symbol against a 10/s limit, so it is capped and strictly best-effort: this exists
+   * to enrich an answer, never to block one. Anything that fails is simply absent, and
+   * `normaliseHoldings` treats a missing quote as "no day change known" rather than zero movement.
+   *
+   * @returns {Promise<Record<string, object>>} keyed by trading symbol
+   */
+  async #fetchQuotes(holdings, accessToken) {
+    const targets = holdings.filter((h) => h.symbol).slice(0, QUOTE_LIMIT);
+    if (!targets.length) return {};
+
+    const quotes = {};
+    for (const batch of chunk(targets, QUOTE_CONCURRENCY)) {
+      const results = await Promise.all(
+        batch.map(async (h) => {
+          try {
+            return [h.symbol, await this.client.getQuote({ accessToken, tradingSymbol: h.symbol, exchange: h.exchange })];
+          } catch (err) {
+            console.warn(`[groww] quote failed for ${h.symbol}: ${err?.message}`);
+            return [h.symbol, null];
+          }
+        })
+      );
+      for (const [symbol, quote] of results) if (quote) quotes[symbol] = quote;
+    }
+    return quotes;
   }
 
   // ---- Portfolio ---------------------------------------------------------------------------
@@ -128,12 +180,17 @@ export default class GrowwService {
    *
    * @param {{ refresh?: boolean }} [options]
    */
-  async getPortfolio({ refresh = false } = {}) {
+  async getPortfolio({ refresh = false, withDayChange = false } = {}) {
     this.#requireConfigured();
 
-    if (!refresh && this.cache && Date.now() - this.cache.at.getTime() < PORTFOLIO_TTL_MS) {
-      return { ...this.cache.data, asOf: this.cache.at, fromCache: true };
-    }
+    // A plain read must not be served from a cache entry that lacks day-change data, or the model
+    // would report 0% moves as fact. The reverse is fine, so the key records what was fetched.
+    const fresh =
+      !refresh &&
+      this.cache &&
+      Date.now() - this.cache.at.getTime() < PORTFOLIO_TTL_MS &&
+      (this.cache.withDayChange || !withDayChange);
+    if (fresh) return { ...this.cache.data, asOf: this.cache.at, fromCache: true };
 
     const data = await this.#withToken(async (accessToken) => {
       const raw = await this.client.getHoldings({ accessToken });
@@ -141,7 +198,12 @@ export default class GrowwService {
       const symbols = rows.map((h) => h.trading_symbol).filter(Boolean);
 
       const { prices, failed } = await this.#fetchPrices(symbols, accessToken);
-      const normalised = this.client.normaliseHoldings(raw, { prices });
+
+      // Normalise once to learn which exchange each holding priced on, so quotes are requested
+      // against the right one, then normalise again with the quotes folded in.
+      const priced = this.client.normaliseHoldings(raw, { prices });
+      const quotes = withDayChange ? await this.#fetchQuotes(priced.holdings, accessToken) : {};
+      const normalised = withDayChange ? this.client.normaliseHoldings(raw, { prices, quotes }) : priced;
 
       return {
         provider: this.provider,
@@ -154,11 +216,12 @@ export default class GrowwService {
         valuationNote: normalised.pricesComplete
           ? ""
           : "Live prices were unavailable for some holdings, so their current value shows the amount invested instead.",
+        dayChangeAvailable: withDayChange && Object.keys(quotes).length > 0,
       };
     });
 
     const at = new Date();
-    this.cache = { at, data };
+    this.cache = { at, data, withDayChange };
     return { ...data, asOf: at, fromCache: false };
   }
 

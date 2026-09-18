@@ -36,6 +36,8 @@ export const isConfigured = isGrowwConfigured;
 export const LTP_BATCH_SIZE = 50;
 /** Exchange assumed for price lookups, since holdings don't say which one. */
 const DEFAULT_EXCHANGE = "NSE";
+/** Price lookup order. Most equity is on NSE; BSE catches the rest instead of leaving it unpriced. */
+export const PRICE_EXCHANGES = ["NSE", "BSE"];
 
 const API_VERSION = "1.0";
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
@@ -181,6 +183,36 @@ const get = async (path, { accessToken, query, fetchImpl = fetch, timeoutMs = 20
 
 export const getHoldings = (options) => get("/v1/holdings/user", options);
 
+/**
+ * Full snapshot for ONE instrument: today's move, the 52-week range, volume and more.
+ * Heavier than /live-data/ltp (one call per symbol, 10/s) so it is only used when the extra context
+ * is actually wanted — see GrowwService.getPortfolio({ withDayChange: true }).
+ *
+ * @returns {Promise<{ lastPrice, dayChange, dayChangePct, week52High, week52Low } | null>}
+ */
+export const getQuote = async ({ tradingSymbol, exchange = DEFAULT_EXCHANGE, ...options }) => {
+  const payload = await get("/v1/live-data/quote", {
+    ...options,
+    query: { exchange, segment: "CASH", trading_symbol: tradingSymbol },
+  });
+  // Return null rather than a zero-filled object: callers treat a missing quote as "unknown", and a
+  // dayChangePct of 0 would be read as "the stock didn't move today".
+  if (!payload || typeof payload !== "object") return null;
+  const hasQuoteFields = ["last_price", "day_change", "day_change_perc", "day_change_percentage"].some(
+    (key) => payload[key] !== undefined
+  );
+  if (!hasQuoteFields) return null;
+
+  return {
+    lastPrice: Number(payload.last_price) || 0,
+    dayChange: Number(payload.day_change) || 0,
+    // Groww spells it `day_change_perc`; accept the longer spelling too in case it changes.
+    dayChangePct: Number(payload.day_change_perc ?? payload.day_change_percentage) || 0,
+    week52High: Number(payload.week_52_high) || 0,
+    week52Low: Number(payload.week_52_low) || 0,
+  };
+};
+
 export const getPositions = (options) => get("/v1/positions/user", { ...options, query: { segment: "CASH" } });
 
 /**
@@ -258,13 +290,32 @@ export const holdingQuantity = (raw) => {
 };
 
 /**
+ * Finds a live price for a symbol. Holdings don't say which exchange they're on, so try NSE first
+ * (where most equity sits) and fall back to BSE rather than treating a BSE-only holding as unpriced.
+ *
+ * @returns {{ price: number, exchange: string }} price 0 when nothing matched
+ */
+export const priceFor = (symbol, prices = {}) => {
+  for (const exchange of PRICE_EXCHANGES) {
+    const price = Number(prices[exchangeSymbolFor(symbol, exchange)]);
+    if (Number.isFinite(price) && price > 0) return { price, exchange };
+  }
+  return { price: 0, exchange: DEFAULT_EXCHANGE };
+};
+
+/**
  * Groww holdings → the normalised shape every broker client returns, so
  * services/brokerage-service.js and the AI tools don't care which broker answered.
  *
- * @param {object} raw      `{ holdings: [...] }` from /v1/holdings/user
- * @param {{ prices?: Record<string, number> }} [options] LTPs keyed "NSE_SYMBOL"
+ * Groww gives cost basis only, so everything about profit and loss here is derived from `prices`
+ * (from /live-data/ltp) and, when asked for, `quotes` (from /live-data/quote, which adds today's
+ * move and the 52-week range).
+ *
+ * @param {object} raw raw `{ holdings: [...] }` from /v1/holdings/user
+ * @param {{ prices?: Record<string, number>, quotes?: Record<string, object> }} [options]
+ *   `prices` keyed "NSE_SYMBOL"/"BSE_SYMBOL"; `quotes` keyed by plain trading symbol.
  */
-export const normaliseHoldings = (raw, { prices = {} } = {}) => {
+export const normaliseHoldings = (raw, { prices = {}, quotes = {} } = {}) => {
   const rows = Array.isArray(raw?.holdings) ? raw.holdings : Array.isArray(raw) ? raw : [];
 
   const holdings = rows
@@ -272,16 +323,18 @@ export const normaliseHoldings = (raw, { prices = {} } = {}) => {
       const symbol = h.trading_symbol ?? "";
       const quantity = holdingQuantity(h);
       const averagePrice = Number(h.average_price) || 0;
-      const lastPrice = Number(prices[exchangeSymbolFor(symbol)]) || 0;
+      const { price: lastPrice, exchange } = priceFor(symbol, prices);
       const invested = quantity * averagePrice;
       // No price means no current value. Fall back to cost so totals stay sane rather than
       // collapsing the portfolio to zero, and flag it via `priced` so callers can say so.
       const priced = lastPrice > 0;
       const current = priced ? quantity * lastPrice : invested;
+      const quote = quotes[symbol] ?? null;
+
       return {
         symbol,
         isin: h.isin ?? "",
-        exchange: DEFAULT_EXCHANGE,
+        exchange,
         quantity,
         averagePrice: round2(averagePrice),
         lastPrice: round2(lastPrice),
@@ -289,7 +342,13 @@ export const normaliseHoldings = (raw, { prices = {} } = {}) => {
         currentValue: round2(current),
         pnl: priced ? round2(current - invested) : 0,
         pnlPct: priced && invested > 0 ? round2(((current - invested) / invested) * 100) : 0,
-        dayChangePct: 0, // not available from Groww's holdings or LTP endpoints
+        // Today's move needs the heavier quote endpoint; 0 when it wasn't requested or didn't answer.
+        dayChangePct: round2(quote?.dayChangePct ?? 0),
+        dayChange: round2(quote?.dayChange ?? 0),
+        ...(quote?.week52High ? { week52High: round2(quote.week52High) } : {}),
+        ...(quote?.week52Low ? { week52Low: round2(quote.week52Low) } : {}),
+        // Filled in below, once the portfolio total is known.
+        allocationPct: 0,
         priced,
         pledgedQuantity: Number(h.pledge_quantity) || 0,
       };
@@ -301,6 +360,15 @@ export const normaliseHoldings = (raw, { prices = {} } = {}) => {
   const currentValue = round2(holdings.reduce((sum, h) => sum + h.currentValue, 0));
   const unpriced = holdings.filter((h) => !h.priced).length;
 
+  // Share of the portfolio each holding represents — the number concentration questions need.
+  for (const h of holdings) {
+    h.allocationPct = currentValue > 0 ? round2((h.currentValue / currentValue) * 100) : 0;
+  }
+
+  // Only priced holdings can honestly be ranked by performance.
+  const ranked = holdings.filter((h) => h.priced && h.investedValue > 0).sort((a, b) => b.pnlPct - a.pnlPct);
+  const brief = (h) => (h ? { symbol: h.symbol, pnl: h.pnl, pnlPct: h.pnlPct } : null);
+
   return {
     count: holdings.length,
     investedValue,
@@ -310,6 +378,19 @@ export const normaliseHoldings = (raw, { prices = {} } = {}) => {
     // True only when every holding got a live price, so the assistant can caveat the total honestly.
     pricesComplete: holdings.length > 0 && unpriced === 0,
     unpricedCount: unpriced,
+
+    // Pre-computed analysis, so the model reads numbers instead of doing arithmetic on a list.
+    analysis: {
+      gainers: ranked.filter((h) => h.pnl > 0).length,
+      losers: ranked.filter((h) => h.pnl < 0).length,
+      bestPerformer: brief(ranked[0]),
+      worstPerformer: brief(ranked.at(-1)),
+      largestHolding: holdings[0] ? { symbol: holdings[0].symbol, allocationPct: holdings[0].allocationPct } : null,
+      // A single name dominating the portfolio is the most common risk worth naming.
+      topHoldingPct: holdings[0]?.allocationPct ?? 0,
+      top3Pct: round2(holdings.slice(0, 3).reduce((sum, h) => sum + h.allocationPct, 0)),
+    },
+
     holdings,
   };
 };

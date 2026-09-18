@@ -76,8 +76,11 @@ const run = async () => {
   const service = new GrowwService();
   let portfolio;
   try {
-    portfolio = await service.getPortfolio();
+    // withDayChange exercises the quote endpoint too, so the check covers every call the app makes.
+    portfolio = await service.getPortfolio({ withDayChange: true });
     ok(`Holdings read: ${portfolio.count} holding(s)`);
+    if (portfolio.dayChangeAvailable) ok("Live quotes read (today's move + 52-week range)");
+    else bad("Live quotes unavailable — day-change analysis will be missing");
   } catch (err) {
     bad(`Holdings read failed: ${err?.message}`);
     process.exitCode = 1;
@@ -90,10 +93,16 @@ const run = async () => {
   } else {
     console.log(chalk.bold("\n  Holdings"));
     for (const h of portfolio.holdings.slice(0, 15)) {
-      const pnl = h.priced ? `${h.pnl >= 0 ? "+" : ""}${rupees(h.pnl)} (${h.pnlPct}%)` : chalk.yellow("no live price");
+      if (!h.priced) {
+        console.log(`   ${h.symbol.padEnd(14)} ${String(h.quantity).padStart(6)}  ${chalk.yellow("no live price")}`);
+        continue;
+      }
+      const tint = h.pnl >= 0 ? chalk.green : chalk.red;
+      const pnl = tint(`${h.pnl >= 0 ? "+" : ""}${rupees(h.pnl)} (${h.pnlPct}%)`.padEnd(26));
+      const day = h.dayChangePct ? ` ${h.dayChangePct >= 0 ? "▲" : "▼"}${Math.abs(h.dayChangePct)}% today` : "";
       console.log(
-        `   ${h.symbol.padEnd(14)} ${String(h.quantity).padStart(6)} @ ${rupees(h.averagePrice).padStart(12)}  ` +
-          `now ${rupees(h.currentValue).padStart(12)}  ${pnl}`
+        `   ${h.symbol.padEnd(14)} ${String(h.quantity).padStart(6)} @ ${rupees(h.averagePrice).padStart(11)} ` +
+          `→ ${rupees(h.lastPrice).padStart(11)} (${h.exchange})  ${pnl} ${String(h.allocationPct).padStart(5)}%${day}`
       );
     }
     if (portfolio.holdings.length > 15) note(`… and ${portfolio.holdings.length - 15} more`);
@@ -101,7 +110,18 @@ const run = async () => {
     console.log(chalk.bold("\n  Totals"));
     note(`Invested: ${rupees(portfolio.investedValue)}`);
     note(`Current:  ${rupees(portfolio.currentValue)}`);
-    note(`P&L:      ${portfolio.pnl >= 0 ? "+" : ""}${rupees(portfolio.pnl)} (${portfolio.pnlPct}%)`);
+    const tint = portfolio.pnl >= 0 ? chalk.green : chalk.red;
+    console.log(
+      `  ${chalk.gray("P&L:     ")} ${tint(`${portfolio.pnl >= 0 ? "+" : ""}${rupees(portfolio.pnl)} (${portfolio.pnlPct}%)`)}`
+    );
+
+    const a = portfolio.analysis;
+    console.log(chalk.bold("\n  Analysis"));
+    note(`${a.gainers} up, ${a.losers} down`);
+    if (a.bestPerformer) note(`Best:  ${a.bestPerformer.symbol} ${a.bestPerformer.pnlPct >= 0 ? "+" : ""}${a.bestPerformer.pnlPct}%`);
+    if (a.worstPerformer) note(`Worst: ${a.worstPerformer.symbol} ${a.worstPerformer.pnlPct >= 0 ? "+" : ""}${a.worstPerformer.pnlPct}%`);
+    note(`Largest holding: ${a.largestHolding?.symbol ?? "n/a"} at ${a.topHoldingPct}% of the portfolio`);
+    note(`Top 3 concentration: ${a.top3Pct}%`);
   }
 
   if (!portfolio.pricesComplete && portfolio.count > 0) {

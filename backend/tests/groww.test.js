@@ -323,6 +323,138 @@ describe("groww.exchangeSymbolFor", () => {
   });
 });
 
+describe("groww.priceFor", () => {
+  it("prefers NSE", () => {
+    const out = groww.priceFor("RELIANCE", { NSE_RELIANCE: 1400, BSE_RELIANCE: 1399 });
+    assert.deepEqual(out, { price: 1400, exchange: "NSE" });
+  });
+
+  it("falls back to BSE so a BSE-only holding isn't left unpriced", () => {
+    const out = groww.priceFor("XYZ", { BSE_XYZ: 55 });
+    assert.deepEqual(out, { price: 55, exchange: "BSE" });
+  });
+
+  it("returns 0 when neither exchange has it", () => {
+    assert.deepEqual(groww.priceFor("NOPE", {}), { price: 0, exchange: "NSE" });
+    assert.deepEqual(groww.priceFor("NOPE", { NSE_NOPE: 0 }), { price: 0, exchange: "NSE" });
+  });
+});
+
+describe("groww.getQuote", () => {
+  beforeEach(() => enableGroww());
+
+  it("maps today's move and the 52-week range", async () => {
+    let url;
+    const fetchImpl = async (u) => {
+      url = u;
+      return success({
+        last_price: 1400,
+        day_change: -12.5,
+        day_change_perc: -0.88,
+        week_52_high: 1600,
+        week_52_low: 1100,
+      });
+    };
+    const quote = await groww.getQuote({ accessToken: "t", tradingSymbol: "RELIANCE", fetchImpl });
+
+    assert.match(url, /exchange=NSE/);
+    assert.match(url, /segment=CASH/);
+    assert.match(url, /trading_symbol=RELIANCE/);
+    assert.equal(quote.dayChangePct, -0.88);
+    assert.equal(quote.week52High, 1600);
+    assert.equal(quote.week52Low, 1100);
+  });
+
+  it("accepts the longer day_change_percentage spelling", async () => {
+    const fetchImpl = async () => success({ last_price: 10, day_change_percentage: 2.5 });
+    const quote = await groww.getQuote({ accessToken: "t", tradingSymbol: "X", fetchImpl });
+    assert.equal(quote.dayChangePct, 2.5);
+  });
+
+  it("returns null rather than a zero-filled quote when there is no price data", async () => {
+    // A zeroed object would be read as "the stock didn't move today", which is a different claim.
+    for (const payload of [null, {}, { volume: 100 }]) {
+      const fetchImpl = async () => success(payload);
+      assert.equal(await groww.getQuote({ accessToken: "t", tradingSymbol: "X", fetchImpl }), null);
+    }
+  });
+});
+
+describe("groww.normaliseHoldings analysis", () => {
+  const raw = {
+    holdings: [
+      { trading_symbol: "WIN", quantity: 10, average_price: 100 }, // +50%
+      { trading_symbol: "LOSE", quantity: 10, average_price: 100 }, // -20%
+      { trading_symbol: "BIG", quantity: 100, average_price: 100 }, // +0%
+    ],
+  };
+  const prices = { NSE_WIN: 150, NSE_LOSE: 80, NSE_BIG: 100 };
+
+  it("reports allocation, winners and losers", () => {
+    const out = groww.normaliseHoldings(raw, { prices });
+
+    // Totals: WIN 1500, LOSE 800, BIG 10000 → 12300
+    assert.equal(out.currentValue, 12300);
+    assert.equal(out.analysis.gainers, 1);
+    assert.equal(out.analysis.losers, 1);
+    assert.equal(out.analysis.bestPerformer.symbol, "WIN");
+    assert.equal(out.analysis.bestPerformer.pnlPct, 50);
+    assert.equal(out.analysis.worstPerformer.symbol, "LOSE");
+    assert.equal(out.analysis.worstPerformer.pnlPct, -20);
+  });
+
+  it("flags concentration via the largest holding", () => {
+    const out = groww.normaliseHoldings(raw, { prices });
+    assert.equal(out.analysis.largestHolding.symbol, "BIG");
+    assert.equal(out.analysis.topHoldingPct, 81.3);
+    assert.equal(out.holdings.find((h) => h.symbol === "BIG").allocationPct, 81.3);
+    // Allocations should account for the whole portfolio.
+    const total = out.holdings.reduce((sum, h) => sum + h.allocationPct, 0);
+    assert.ok(Math.abs(total - 100) < 0.2, `allocations summed to ${total}`);
+  });
+
+  it("ranks only priced holdings, so an unpriced one can't be called the worst", () => {
+    const out = groww.normaliseHoldings(
+      { holdings: [...raw.holdings, { trading_symbol: "UNKNOWN", quantity: 1, average_price: 500 }] },
+      { prices }
+    );
+    const ranked = [out.analysis.bestPerformer.symbol, out.analysis.worstPerformer.symbol];
+    assert.ok(!ranked.includes("UNKNOWN"));
+  });
+
+  it("folds in day change and the 52-week range when quotes are supplied", () => {
+    const out = groww.normaliseHoldings(raw, {
+      prices,
+      quotes: { WIN: { dayChangePct: 1.5, dayChange: 2.2, week52High: 200, week52Low: 90 } },
+    });
+    const win = out.holdings.find((h) => h.symbol === "WIN");
+    assert.equal(win.dayChangePct, 1.5);
+    assert.equal(win.week52High, 200);
+
+    // No quote means the field stays 0 and the 52-week keys are absent, not zeroed.
+    const lose = out.holdings.find((h) => h.symbol === "LOSE");
+    assert.equal(lose.dayChangePct, 0);
+    assert.equal("week52High" in lose, false);
+  });
+
+  it("records the exchange a price actually came from", () => {
+    const out = groww.normaliseHoldings({ holdings: [{ trading_symbol: "ONLYBSE", quantity: 1, average_price: 10 }] }, {
+      prices: { BSE_ONLYBSE: 12 },
+    });
+    assert.equal(out.holdings[0].exchange, "BSE");
+    assert.equal(out.holdings[0].priced, true);
+    assert.equal(out.holdings[0].pnl, 2);
+  });
+
+  it("gives an empty portfolio a safe analysis block", () => {
+    const out = groww.normaliseHoldings({ holdings: [] });
+    assert.equal(out.analysis.gainers, 0);
+    assert.equal(out.analysis.bestPerformer, null);
+    assert.equal(out.analysis.largestHolding, null);
+    assert.equal(out.analysis.topHoldingPct, 0);
+  });
+});
+
 describe("groww read-only surface", () => {
   it("exposes no order functions at all", () => {
     const exported = Object.keys(groww).join(" ").toLowerCase();
@@ -370,7 +502,7 @@ describe("canSeeGrowwPortfolio", () => {
 
 /** Fake client implementing just what GrowwService touches. */
 const fakeClient = (overrides = {}) => {
-  const state = { mints: 0, holdingCalls: 0, ltpCalls: 0, ltpBatches: [] };
+  const state = { mints: 0, holdingCalls: 0, ltpCalls: 0, ltpBatches: [], quoteCalls: [] };
   const client = {
     provider: "groww",
     label: "Groww",
@@ -380,6 +512,10 @@ const fakeClient = (overrides = {}) => {
     exchangeSymbolFor: groww.exchangeSymbolFor,
     normaliseHoldings: groww.normaliseHoldings,
     normalisePositions: groww.normalisePositions,
+    async getQuote({ tradingSymbol }) {
+      state.quoteCalls.push(tradingSymbol);
+      return { lastPrice: 1200, dayChange: 5, dayChangePct: 0.42, week52High: 1500, week52Low: 900 };
+    },
     async createAccessToken() {
       state.mints += 1;
       return { accessToken: `tok-${state.mints}`, expiresAt: new Date(Date.now() + 3600_000) };
@@ -526,5 +662,101 @@ describe("GrowwService.getPortfolio", () => {
     await service.getPortfolio();
     assert.equal(state.mints, 2);
     assert.equal(state.holdingCalls, 2);
+  });
+});
+
+describe("GrowwService price lookups", () => {
+  beforeEach(() => enableGroww());
+
+  it("retries symbols that NSE didn't price against BSE", async () => {
+    const asked = [];
+    const { client } = fakeClient({
+      getHoldings: async () => ({
+        holdings: [
+          { trading_symbol: "ONNSE", quantity: 1, average_price: 100 },
+          { trading_symbol: "ONBSE", quantity: 1, average_price: 100 },
+        ],
+      }),
+      async getLtp({ exchangeSymbols }) {
+        asked.push(exchangeSymbols);
+        // NSE knows only ONNSE; BSE answers for ONBSE.
+        if (exchangeSymbols.some((s) => s.startsWith("NSE_"))) return { NSE_ONNSE: 110 };
+        return { BSE_ONBSE: 120 };
+      },
+    });
+    const portfolio = await new GrowwService(client).getPortfolio();
+
+    assert.deepEqual(asked[0], ["NSE_ONNSE", "NSE_ONBSE"], "first pass tries everything on NSE");
+    assert.deepEqual(asked[1], ["BSE_ONBSE"], "only the misses are retried on BSE");
+    assert.equal(portfolio.pricesComplete, true);
+    assert.equal(portfolio.holdings.find((h) => h.symbol === "ONBSE").exchange, "BSE");
+  });
+
+  it("skips the BSE pass when NSE priced everything", async () => {
+    const asked = [];
+    const { client } = fakeClient({
+      async getLtp({ exchangeSymbols }) {
+        asked.push(exchangeSymbols);
+        return { NSE_RELIANCE: 1200 };
+      },
+    });
+    await new GrowwService(client).getPortfolio();
+    assert.equal(asked.length, 1, "no wasted second call");
+  });
+});
+
+describe("GrowwService day-change enrichment", () => {
+  beforeEach(() => enableGroww());
+
+  it("fetches quotes only when asked", async () => {
+    const { client, state } = fakeClient();
+    const service = new GrowwService(client);
+
+    const plain = await service.getPortfolio();
+    assert.deepEqual(state.quoteCalls, [], "a normal read costs no quote calls");
+    assert.equal(plain.dayChangeAvailable, false);
+    assert.equal(plain.holdings[0].dayChangePct, 0);
+
+    const detailed = await service.getPortfolio({ refresh: true, withDayChange: true });
+    assert.deepEqual(state.quoteCalls, ["RELIANCE"]);
+    assert.equal(detailed.dayChangeAvailable, true);
+    assert.equal(detailed.holdings[0].dayChangePct, 0.42);
+    assert.equal(detailed.holdings[0].week52High, 1500);
+  });
+
+  it("does not serve a day-change request from a cache that has no quotes", async () => {
+    const { client, state } = fakeClient();
+    const service = new GrowwService(client);
+
+    await service.getPortfolio(); // caches without quotes
+    const detailed = await service.getPortfolio({ withDayChange: true });
+
+    assert.equal(detailed.fromCache, false, "otherwise 0% would be reported as fact");
+    assert.equal(detailed.dayChangeAvailable, true);
+    assert.equal(state.holdingCalls, 2);
+  });
+
+  it("serves a plain read from a richer cached entry", async () => {
+    const { client, state } = fakeClient();
+    const service = new GrowwService(client);
+
+    await service.getPortfolio({ withDayChange: true });
+    const plain = await service.getPortfolio();
+
+    assert.equal(plain.fromCache, true);
+    assert.equal(state.holdingCalls, 1);
+  });
+
+  it("survives a quote failure without losing the portfolio", async () => {
+    const { client } = fakeClient({
+      async getQuote() {
+        throw new Error("rate limited");
+      },
+    });
+    const portfolio = await new GrowwService(client).getPortfolio({ withDayChange: true });
+
+    assert.equal(portfolio.count, 1);
+    assert.equal(portfolio.currentValue, 12000, "P&L still works off the LTP");
+    assert.equal(portfolio.dayChangeAvailable, false, "so the model knows not to claim a daily move");
   });
 });

@@ -211,6 +211,13 @@ export const buildToolSchemas = ({
           type: "object",
           properties: {
             refresh: { type: "boolean", description: "Skip the short cache and re-fetch. Use sparingly." },
+            withDayChange: {
+              type: "boolean",
+              description:
+                "Also fetch today's price move and the 52-week range per holding. Slower (one extra " +
+                "call per stock), so pass true only when the question is about today's movement or " +
+                "where a stock sits in its yearly range.",
+            },
           },
         },
       },
@@ -423,11 +430,14 @@ export const createToolRunner = ({ user, finance, brokerage = null, groww = null
      * result carries `ownership` and, for a shared account, a `disclaimer` the model is told to
      * repeat. `pricesComplete` travels too, because Groww gives no live price with holdings.
      */
-    async get_groww_portfolio({ refresh } = {}) {
+    async get_groww_portfolio({ refresh, withDayChange } = {}) {
       if (!groww) {
         return { error: { code: "NOT_CONFIGURED", message: "Groww is not available for this user." } };
       }
-      const data = await groww.getPortfolio({ refresh: refresh === true });
+      const data = await groww.getPortfolio({
+        refresh: refresh === true,
+        withDayChange: withDayChange === true,
+      });
       return {
         broker: data.provider,
         currency: data.currency,
@@ -445,6 +455,13 @@ export const createToolRunner = ({ user, finance, brokerage = null, groww = null
         profitLossPct: data.pnlPct,
         pricesComplete: data.pricesComplete,
         ...(data.valuationNote && { valuationNote: data.valuationNote }),
+        // Pre-computed so the model quotes figures instead of doing arithmetic over the list.
+        analysis: data.analysis,
+        // Absent day-change data means "not fetched", NOT "the stock didn't move".
+        dayChangeAvailable: data.dayChangeAvailable === true,
+        ...(withDayChange === true && data.dayChangeAvailable !== true
+          ? { dayChangeNote: "Today's move could not be fetched, so do not state any daily change." }
+          : {}),
         coverage: "Equity/stocks only. Groww's API does not expose mutual fund holdings.",
         holdings: data.holdings,
       };

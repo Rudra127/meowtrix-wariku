@@ -38,6 +38,7 @@ export const queryKeys = {
 
   integrations: {
     all: ['integrations'] as const,
+    groww: ['integrations', 'groww'] as const,
   },
 
   learn: {

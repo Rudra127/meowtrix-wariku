@@ -13,6 +13,8 @@ import { Reveal } from '@/components/motion';
 import { API_URL } from '@/config/env';
 import { useBrokerages } from '@/features/finance/useFinance';
 import { BrokerageCard } from '@/features/integrations/BrokerageCard';
+import { GrowwCard } from '@/features/integrations/GrowwCard';
+import { useGrowwStatus } from '@/features/integrations/useBrokerage';
 import { getAchievements } from '@/features/learn/gamification';
 import { useLearnerStats } from '@/features/learn/useLearn';
 import { GOAL_OPTIONS, LEVEL_OPTIONS } from '@/features/onboarding/options';
@@ -55,6 +57,7 @@ export function ProfileScreen() {
   const [editing, setEditing] = useState<'level' | 'goal' | null>(null);
   const { level, plan } = usePersonalization();
   const brokerages = useBrokerages();
+  const growwStatus = useGrowwStatus();
   const learnStats = useLearnerStats().data;
   const streakDays = learnStats?.streakDays ?? 0;
   const totalXp = learnStats?.xp ?? 0;
@@ -181,6 +184,9 @@ export function ProfileScreen() {
         {brokerages.data?.map((status) => (
           <BrokerageCard key={status.provider} status={status} onMessage={setNotice} />
         ))}
+        {/* Groww is server-configured with no connect flow, so it gets its own card. Hidden entirely
+            when the server has no Groww credentials — an unusable card is just noise. */}
+        {growwStatus.data?.configured && <GrowwCard status={growwStatus.data} />}
       </Reveal>
 
       <Reveal index={5} style={styles.section}>

@@ -11,7 +11,8 @@
  * The app never sees the broker API secret or the access token. Holdings are only ever read by the
  * AI assistant (backend/services/ai-tools.js), never fetched here.
  */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/expo';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useState } from 'react';
@@ -36,6 +37,20 @@ const OUTCOMES: Record<string, { ok: boolean; message: string }> = {
   link_expired: { ok: false, message: 'That connection link expired. Please try again.' },
   failed: { ok: false, message: "Couldn't connect. Please try again." },
 };
+
+/**
+ * Groww's status. Read-only and server-configured: there is no connect flow to drive, so unlike
+ * `useBrokerage` this is a plain query with no mutations.
+ */
+export function useGrowwStatus() {
+  const api = useApi();
+  const { isSignedIn } = useAuth();
+  return useQuery({
+    queryKey: queryKeys.integrations.groww,
+    queryFn: () => integrationsApi.growwStatus(api),
+    enabled: !!isSignedIn,
+  });
+}
 
 export function useBrokerage(provider: BrokerProvider) {
   const api = useApi();

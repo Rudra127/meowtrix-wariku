@@ -206,6 +206,22 @@ export type VoiceCapabilities = {
 
 export type BrokerProvider = 'upstox' | 'zerodha';
 
+/**
+ * Groww is not a `BrokerProvider` on purpose: it has no OAuth, so there is nothing to connect or
+ * disconnect. One API key on the server means one portfolio, and `available` says whether the
+ * signed-in user is allowed to see it. `shared` means the server set no owner, so the holdings are a
+ * demo account rather than this user's own.
+ */
+export type GrowwStatus = {
+  provider: 'groww';
+  label: string;
+  configured: boolean;
+  available: boolean;
+  shared: boolean;
+  coverage: string;
+  note: string;
+};
+
 export type IntegrationStatus = {
   provider: BrokerProvider;
   label: string;

@@ -8,6 +8,7 @@ import type {
   AnswerCheck,
   BrokerLoginUrl,
   BrokerProvider,
+  GrowwStatus,
   BudgetStatus,
   ChatMessage,
   ChatResponse,
@@ -169,6 +170,12 @@ export const integrationsApi = {
     api.get<BrokerLoginUrl>(`/integrations/${provider}/login-url`),
   disconnect: (api: ApiClient, provider: BrokerProvider) =>
     api.delete<{ disconnected: true }>(`/integrations/${provider}`),
+
+  /**
+   * Groww's read-only status. Separate from the list above because Groww has no OAuth, so it isn't
+   * part of the connectable-provider registry.
+   */
+  growwStatus: (api: ApiClient) => api.get<GrowwStatus>('/integrations/groww/status'),
 };
 
 export const learnApi = {

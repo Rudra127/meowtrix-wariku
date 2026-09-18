@@ -15,6 +15,7 @@ npm test           # node:test + supertest, fully offline
 TEST_MONGODB_URI=mongodb://127.0.0.1:27017/wariku_test npm test   # + real-Mongo tests (each file uses its own DB via testMongoUri())
 npm run lint
 npm run seed:learn # upsert Learn content (units, lessons, exercises) from database/seed/learn-content.js
+npm run groww:check # verify GROWW_API_KEY/SECRET against the live API and print the portfolio
 ```
 
 ## Layout
@@ -29,6 +30,7 @@ backend/
 │   ├── user.js               PATCH/DELETE /users/me, PUT /users/me/onboarding, GET /admin/users
 │   ├── finance.js            /finance/* — transactions, budgets, goals, summary, series, voice
 │   ├── integrations.js       /integrations/:provider/* — broker connect / status / callback (generic)
+│   │                         plus /integrations/groww/* (single-account, outside the registry)
 │   ├── ai.js                 POST /ai/chat
 │   ├── learn.js              GET /learn/path, /learn/stats, /learn/lessons/:slug,
 │   │                         POST check + submit + practice + practice/:id/submit
@@ -42,13 +44,16 @@ backend/
 │   ├── ai-service.js         Ask AI agent loop + level-aware system prompt (personalised by level/goal)
 │   ├── ai-tools.js           Tool schemas + runner the AI calls to read the user's real data
 │   ├── brokerage-service.js  Generic broker: connect flow, daily-token lifecycle, normalised holdings
-│   └── brokerages.js         Registry (Upstox, Zerodha) + connectedBrokerage / brokerageContext helpers
+│   ├── brokerages.js         Registry (Upstox, Zerodha) + connectedBrokerage / brokerageContext helpers
+│   └── groww-service.js      Groww portfolio — ONE server-wide account, in-memory daily token
 ├── lib/
 │   ├── deepseek.js           DeepSeek client — chat, JSON mode, tool calling (only LLM caller)
 │   ├── transcribe.js         Speech-to-text (OpenAI-compatible /audio/transcriptions)
 │   ├── kite.js               Zerodha Kite Connect v3 — uniform broker-client interface
 │   ├── upstox.js             Upstox API v2 (free) — same uniform broker-client interface
+│   ├── groww.js              Groww Trading API — read-only, no OAuth (see "Groww" below)
 │   └── crypto.js             AES-256-GCM for tokens at rest + signed OAuth state (HMAC)
+├── scripts/check-groww.js    `npm run groww:check` — proves the Groww key/secret against the live API
 ├── database/
 │   ├── connection.js         Also honours DNS_SERVERS for networks that block SRV lookups
 │   ├── models/               user (LEVELS/GOALS/timezone), account, transaction, budget, goal,
@@ -85,6 +90,8 @@ backend/
 | `STT_BASE_URL`, `STT_MODEL` | no | OpenAI-compatible transcription endpoint. Defaults to Groq `whisper-large-v3-turbo`. |
 | `UPSTOX_API_KEY`, `UPSTOX_API_SECRET`, `UPSTOX_REDIRECT_URL` | for holdings | **Free** broker. All three + `ENCRYPTION_KEY` to connect Upstox. Redirect URL must match the Upstox app exactly. |
 | `ZERODHA_API_KEY`, `ZERODHA_API_SECRET`, `ZERODHA_REDIRECT_URL` | for holdings | **Paid** broker. All three + `ENCRYPTION_KEY` to connect Zerodha. Redirect URL must match the Kite app exactly. |
+| `GROWW_API_KEY`, `GROWW_API_SECRET` | for Groww | **Paid** (₹499/mo) and **single-account**: Groww has no OAuth, so this is one portfolio server-wide, not per user. No `ENCRYPTION_KEY` needed (token is in-memory only). |
+| `GROWW_PORTFOLIO_OWNER_EMAIL` | strongly advised | Email of the Groww account holder. Only that signed-in user sees the portfolio. Blank = shared demo portfolio visible to everyone. |
 | `ENCRYPTION_KEY` | for holdings | 32 random bytes (hex). Encrypts broker tokens at rest. Rotating it invalidates every connection. |
 | `APP_SCHEME` | no | Deep-link scheme the OAuth callback returns to. Default `wariku` (matches `mobile/app.json`). |
 | `CLIENT_URLS` | prod web | Comma-separated browser origins for CORS. Native apps don't need it. |
@@ -166,6 +173,8 @@ them, then POSTs to `/finance/transactions` with `source:"voice"`.
 | GET | `/integrations/:provider/login-url` | protect | `{ url, expiresInSeconds, redirectUrl }` |
 | GET | `/integrations/:provider/callback` | **public** (signed `state`) | 302 → `wariku://broker-callback?provider=…&status=…` |
 | DELETE | `/integrations/:provider` | protect | `{ disconnected: true }` |
+| GET | `/integrations/groww/status` | protect | `{ configured, available, shared, coverage }` — Groww is outside the `:provider` registry (no OAuth, nothing to connect) |
+| GET | `/integrations/groww/portfolio` | protect | Normalised holdings + totals. 403 unless `canSeeGrowwPortfolio()`, 503 if unconfigured. `?refresh=true` skips the 5-min cache |
 
 Adding a broker = write `lib/<broker>.js` against the uniform client interface, then add one line to
 `services/brokerages.js`. Nothing else changes. Holdings are intentionally **not** an HTTP endpoint —
@@ -176,6 +185,41 @@ Error codes in use: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALID
 `BAD_REQUEST` / `DUPLICATE` 400, `PAYLOAD_TOO_LARGE` 413, `REAUTH_REQUIRED` 409 (broker session expired),
 `RATE_LIMITED` 429, `INTERNAL_ERROR` 500, `UPSTREAM_ERROR` 502, `SERVICE_UNAVAILABLE` 503,
 `BAD_SIGNATURE` 400 (webhook).
+
+## Groww (`lib/groww.js`, `services/groww-service.js`)
+
+**Groww is not a per-user connection, and it cannot be made into one.** Unlike Upstox and Zerodha it
+has no OAuth and no redirect URI: all three auth modes in
+[its docs](https://groww.in/trade-api/docs/curl) are the account holder authenticating for
+themselves. So `GROWW_API_KEY` is one Groww account for the entire server. If you need "every user
+sees their own holdings", that is Upstox (free, real OAuth 2.0) — not this.
+
+Because of that, Groww deliberately sits **outside** the `brokerages` registry and
+`BrokerageService`. There is nothing to connect or disconnect, no `Integration` row, and nothing
+written to Mongo at all: credentials stay in the environment and the daily token lives in memory.
+`ENCRYPTION_KEY` is therefore not required.
+
+Things that will bite you:
+
+- **`GROWW_PORTFOLIO_OWNER_EMAIL` is a privacy control, not a nicety.** Leave it blank and every
+  signed-in user sees the key owner's real holdings. Blank switches the AI tool into "shared demo
+  account" wording, which the model is told to state before discussing the data, but the gate is the
+  real protection. `canSeeGrowwPortfolio()` in `config/index.js` is the single place that decides.
+- **Holdings carry no price.** `/v1/holdings/user` returns `average_price` only — no last price, no
+  P&L, and no exchange either. Current value comes from a second `/v1/live-data/ltp` call (50 symbols
+  per batch, `NSE_` assumed). When prices don't arrive, `currentValue` falls back to cost and
+  `pricesComplete: false` is set so the assistant caveats the total instead of passing cost off as
+  market value.
+- **Equity only.** No mutual funds in the API, which is most of what Groww is used for. The tool
+  description says so, so the model can answer the question honestly.
+- **The token endpoint allows 150 calls per 24h** and tokens die at 06:00 IST. Hence the single
+  cached token, collapsed concurrent mints, and one automatic retry on rejection.
+- **`lib/groww.js` implements no order functions on purpose.** A test asserts none are exported, so a
+  bug here can never place a trade.
+
+Run `npm run groww:check` after setting the keys. It tries both `Authorization` header forms (the
+docs describe it only as "User API Key"), reports which worked, prints the portfolio, and never logs
+the key, secret or token.
 
 ## AI-generated practice (`services/practice-service.js`)
 

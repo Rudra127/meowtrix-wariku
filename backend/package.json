@@ -10,7 +10,8 @@
     "prod": "cross-env NODE_ENV=prod node index.js",
     "test": "cross-env NODE_ENV=test node --test tests/*.test.js",
     "lint": "eslint .",
-    "seed:learn": "cross-env NODE_ENV=dev node database/seed/seed-learn.js"
+    "seed:learn": "cross-env NODE_ENV=dev node database/seed/seed-learn.js",
+    "groww:check": "cross-env NODE_ENV=dev node scripts/check-groww.js"
   },
   "keywords": [
     "wariku",

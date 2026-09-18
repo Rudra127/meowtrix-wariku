@@ -131,8 +131,9 @@ call tools (`backend/services/ai-tools.js`) to read the user's real data before 
 
 **Tools available** (each bound to one user; amounts cross the boundary in rupees):
 `get_month_summary`, `list_transactions`, `get_spending_trend`, `get_budgets`, `get_goals`, `get_accounts`,
-`record_transaction` (the only writer — logs an expense/income the user asks it to), and — only when a
-brokerage is linked — `get_zerodha_holdings`, `get_zerodha_positions`.
+`record_transaction` (the only writer — logs an expense/income the user asks it to), plus — only when a
+brokerage is linked — `get_holdings` and `get_positions`, and — only when Groww is configured and permitted for
+that user — `get_groww_portfolio`.
 
 **Answers adapt to the user's level** (beginner / intermediate / advanced from onboarding): the system prompt
 bans jargon for beginners and goes precise/quantitative for advanced users. The load-bearing rule is
@@ -142,6 +143,15 @@ bans jargon for beginners and goes precise/quantitative for advanced users. The 
 screen), matching the owner's ask. The integration layer is provider-generic: a broker is a `lib/<broker>.js`
 client implementing a uniform interface plus one line in `services/brokerages.js`. The connect flow lives in
 Profile → Connected accounts; tokens are encrypted at rest and expire daily, surfaced as a "Reconnect" state.
+
+**Groww** (`lib/groww.js`, `services/groww-service.js`, tool `get_groww_portfolio`) is the exception and the
+reason matters: **Groww has no OAuth**. Every auth mode it offers is the account holder authenticating for
+themselves, so one API key is one portfolio for the whole server, never per user. It therefore sits outside the
+registry, stores nothing in Mongo, and is gated by `GROWW_PORTFOLIO_OWNER_EMAIL` so one person's real holdings
+are never shown to another user as their own. It covers **stocks only** (no mutual funds, which is most of what
+Groww is used for) and its holdings payload has no prices, so current value comes from a separate live-price
+call and is flagged when unavailable. Verify credentials with `npm run groww:check`.
+**If the goal is "any user connects their own account", use Upstox — not Groww.**
 
 **Still next, in order**
 1. **Persist conversations:** `Conversation { userId, title, createdAt }`,

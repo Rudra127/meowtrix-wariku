@@ -16,11 +16,13 @@
 //
 // Grounding rule that matters most: the model must never invent a number. Every figure it states
 // about the user has to come from a tool result, and the prompt says so explicitly.
+import { canSeeGrowwPortfolio, config } from "../config/index.js";
 import { createChatCompletion } from "../lib/deepseek.js";
 import { localDateKey } from "../utils/dates.js";
 import { ValidationError } from "../utils/index.js";
 import { brokerageContext, connectedBrokerage } from "./brokerages.js";
 import FinanceService from "./finance-service.js";
+import { growwService } from "./groww-service.js";
 import { MAX_CALLS_PER_ROUND, MAX_TOOL_ROUNDS, buildToolSchemas, createToolRunner } from "./ai-tools.js";
 
 export const MAX_MESSAGES = 40;
@@ -106,7 +108,8 @@ const GOAL_FOCUS = {
 
 /**
  * @param {object} user             Mongoose user doc
- * @param {{ brokerLinked?: boolean, brokerNeedsReauth?: boolean, brokerLabel?: string }} [context]
+ * @param {{ brokerLinked?: boolean, brokerNeedsReauth?: boolean, brokerLabel?: string,
+ *           growwShared?: boolean, growwOwn?: boolean }} [context]
  */
 export const buildSystemPrompt = (user, context = {}) => {
   const brokerLabel = context.brokerLabel || "a brokerage";
@@ -130,6 +133,17 @@ export const buildSystemPrompt = (user, context = {}) => {
         "of their question in the meantime.",
     context.brokerNeedsReauth
       ? `Their ${brokerLabel} session has expired. If a holdings lookup fails, tell them to reconnect from Profile.`
+      : null,
+    context.growwShared
+      ? "A shared demo Groww portfolio is available through get_groww_portfolio. It is NOT this " +
+        "user's own account. Whenever you use it, say the holdings come from a demo account first, " +
+        "and never call them 'your holdings'."
+      : null,
+    context.growwOwn
+      ? "Their own Groww account is readable through get_groww_portfolio. It covers stocks in their " +
+        "demat account only: Groww's API does not expose mutual funds, so say that plainly if they " +
+        "ask about funds. When pricesComplete is false, some holdings had no live price and their " +
+        "current value is the amount invested, so caveat the total rather than calling it market value."
       : null,
     "",
     "GROUNDING. THIS IS THE RULE THAT MATTERS MOST",
@@ -204,10 +218,11 @@ export default class AIService {
    * `brokers` is a resolver with `context(user)` and `connected(user)`; defaults to the real
    * brokerages registry, and tests pass a fake.
    */
-  constructor(complete = createChatCompletion, { finance, brokers } = {}) {
+  constructor(complete = createChatCompletion, { finance, brokers, groww } = {}) {
     this.complete = complete;
     this.finance = finance ?? new FinanceService();
     this.brokers = brokers ?? { context: brokerageContext, connected: connectedBrokerage };
+    this.groww = groww ?? growwService;
   }
 
   /**
@@ -223,8 +238,25 @@ export default class AIService {
     // never offers a capability this user doesn't have. Resolve the connected broker once and reuse
     // it for the tools — never let a broker/Mongo outage break the chat.
     const { context, brokerage } = await this.#brokerState(user);
-    const tools = buildToolSchemas({ brokerLinked: context.linked, brokerLabel: context.label });
-    const runner = createToolRunner({ user, finance: this.finance, brokerage });
+
+    // Groww is server-wide rather than per-user, so the gate decides whether this user may see it
+    // at all, and `growwShared` decides how honestly it has to be described.
+    const growwAllowed = canSeeGrowwPortfolio(user) && this.groww.isConfigured();
+    const growwShared = growwAllowed && !config.groww.ownerEmail;
+
+    const tools = buildToolSchemas({
+      brokerLinked: context.linked,
+      brokerLabel: context.label,
+      growwPortfolio: growwAllowed,
+      growwShared,
+    });
+    const runner = createToolRunner({
+      user,
+      finance: this.finance,
+      brokerage,
+      groww: growwAllowed ? this.groww : null,
+      growwShared,
+    });
 
     const conversation = [
       {
@@ -233,6 +265,8 @@ export default class AIService {
           brokerLinked: context.linked,
           brokerNeedsReauth: context.needsReauth,
           brokerLabel: context.label,
+          growwShared,
+          growwOwn: growwAllowed && !growwShared,
         }),
       },
       ...history,

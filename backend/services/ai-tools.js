@@ -33,7 +33,12 @@ const money = (minor) => toMajor(minor);
  *
  * @param {{ zerodhaLinked?: boolean }} context
  */
-export const buildToolSchemas = ({ brokerLinked = false, brokerLabel = "your brokerage" } = {}) => {
+export const buildToolSchemas = ({
+  brokerLinked = false,
+  brokerLabel = "your brokerage",
+  growwPortfolio = false,
+  growwShared = false,
+} = {}) => {
   const tools = [
     {
       type: "function",
@@ -182,6 +187,36 @@ export const buildToolSchemas = ({ brokerLinked = false, brokerLabel = "your bro
     );
   }
 
+  // Groww is a single server-wide account (it has no OAuth), so the description has to be explicit
+  // about whose holdings these are. Calling a shared demo portfolio "yours" would be a lie the model
+  // would happily repeat.
+  if (growwPortfolio) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "get_groww_portfolio",
+        description: growwShared
+          ? "Equity holdings from a SHARED DEMO Groww account configured on this server. These are " +
+            "NOT the user's own holdings — say so plainly whenever you use this data, and never call " +
+            "them 'your holdings'. Returns quantity, average price, current price, invested value, " +
+            "current value and profit/loss per holding plus totals, in INR. Covers stocks only, no " +
+            "mutual funds."
+          : "The user's own equity holdings from their Groww account: quantity, average price, " +
+            "current price, invested value, current value and profit/loss per holding plus totals, " +
+            "in INR. Covers stocks held in the demat account only, NOT mutual funds — if they ask " +
+            "about mutual funds, say Groww's API does not expose them. If `pricesComplete` is false, " +
+            "some holdings had no live price and their current value shows the amount invested, so " +
+            "caveat the total instead of stating it as market value.",
+        parameters: {
+          type: "object",
+          properties: {
+            refresh: { type: "boolean", description: "Skip the short cache and re-fetch. Use sparingly." },
+          },
+        },
+      },
+    });
+  }
+
   return tools;
 };
 
@@ -207,7 +242,7 @@ const clampInt = (value, min, max, fallback) => {
  *           zerodha: import("./zerodha-service.js").default }} deps
  * @returns {{ run: (name: string, rawArgs: string) => Promise<object>, names: string[] }}
  */
-export const createToolRunner = ({ user, finance, brokerage = null }) => {
+export const createToolRunner = ({ user, finance, brokerage = null, groww = null, growwShared = false }) => {
   const currency = user.currency || "INR";
 
   const handlers = {
@@ -380,6 +415,38 @@ export const createToolRunner = ({ user, finance, brokerage = null }) => {
         positionCount: data.count,
         profitLoss: data.pnl,
         positions: data.positions,
+      };
+    },
+
+    /**
+     * Groww equity holdings. Unlike `get_holdings` this reads a single server-wide account, so the
+     * result carries `ownership` and, for a shared account, a `disclaimer` the model is told to
+     * repeat. `pricesComplete` travels too, because Groww gives no live price with holdings.
+     */
+    async get_groww_portfolio({ refresh } = {}) {
+      if (!groww) {
+        return { error: { code: "NOT_CONFIGURED", message: "Groww is not available for this user." } };
+      }
+      const data = await groww.getPortfolio({ refresh: refresh === true });
+      return {
+        broker: data.provider,
+        currency: data.currency,
+        asOf: data.asOf,
+        ownership: growwShared ? "shared_demo_account" : "user_own_account",
+        ...(growwShared && {
+          disclaimer:
+            "These holdings belong to a shared demo account, not to this user. Say so before " +
+            "discussing them.",
+        }),
+        holdingCount: data.count,
+        investedValue: data.investedValue,
+        currentValue: data.currentValue,
+        profitLoss: data.pnl,
+        profitLossPct: data.pnlPct,
+        pricesComplete: data.pricesComplete,
+        ...(data.valuationNote && { valuationNote: data.valuationNote }),
+        coverage: "Equity/stocks only. Groww's API does not expose mutual fund holdings.",
+        holdings: data.holdings,
       };
     },
   };

@@ -54,6 +54,20 @@ export const config = {
     redirectUrl: process.env.UPSTOX_REDIRECT_URL,
   },
 
+  // Groww is NOT like the two above. It has no OAuth and no redirect: the three auth modes it
+  // offers (access token / API key + secret / TOTP) are all the account holder authenticating for
+  // themselves. See https://groww.in/trade-api/docs/curl.
+  //
+  // So one key pair == ONE Groww account, server-wide. It cannot be "each user's portfolio".
+  // `ownerEmail` is the safety gate: only that signed-in user is shown this portfolio. Leave it
+  // blank and it is treated as a shared demo portfolio, which the assistant is told to call it.
+  groww: {
+    apiKey: process.env.GROWW_API_KEY,
+    apiSecret: process.env.GROWW_API_SECRET,
+    baseUrl: process.env.GROWW_BASE_URL || "https://api.groww.in",
+    ownerEmail: (process.env.GROWW_PORTFOLIO_OWNER_EMAIL || "").trim().toLowerCase(),
+  },
+
   // Encrypts third-party access tokens at rest (lib/crypto.js). 32 random bytes, hex encoded.
   encryptionKey: process.env.ENCRYPTION_KEY,
 
@@ -71,8 +85,26 @@ export const isZerodhaConfigured = () =>
 export const isUpstoxConfigured = () =>
   Boolean(config.upstox.apiKey && config.upstox.apiSecret && config.upstox.redirectUrl && config.encryptionKey);
 
+/**
+ * Groww needs no ENCRYPTION_KEY: the credentials stay in the environment and the daily access token
+ * is held in memory only, so nothing sensitive is ever written to Mongo.
+ */
+export const isGrowwConfigured = () => Boolean(config.groww.apiKey && config.groww.apiSecret);
+
+/**
+ * Whether this signed-in user may see the server's Groww portfolio.
+ * With no owner set, it is a shared demo portfolio and everyone may see it. With an owner set, only
+ * that person does, so one person's real holdings are never shown to another user as their own.
+ */
+export const canSeeGrowwPortfolio = (user) => {
+  if (!isGrowwConfigured()) return false;
+  const owner = config.groww.ownerEmail;
+  if (!owner) return true;
+  return (user?.email || "").trim().toLowerCase() === owner;
+};
+
 /** True when at least one brokerage is usable. */
-export const isAnyBrokerConfigured = () => isZerodhaConfigured() || isUpstoxConfigured();
+export const isAnyBrokerConfigured = () => isZerodhaConfigured() || isUpstoxConfigured() || isGrowwConfigured();
 
 /** True when voice transcription is available. */
 export const isSttConfigured = () => Boolean(config.stt.apiKey);
@@ -97,6 +129,12 @@ export const reportMissingConfig = () => {
   if (!isAnyBrokerConfigured()) {
     console.warn(
       "⚠️  No brokerage configured — set UPSTOX_* (free) or ZERODHA_* + ENCRYPTION_KEY to enable holdings in Ask AI"
+    );
+  }
+  if (isGrowwConfigured() && !config.groww.ownerEmail) {
+    console.warn(
+      "⚠️  GROWW_PORTFOLIO_OWNER_EMAIL is not set — the Groww portfolio is visible to EVERY signed-in " +
+        "user as a shared demo. Set it to the email of the Groww account holder to restrict it."
     );
   }
   return missing.map(([name]) => name);

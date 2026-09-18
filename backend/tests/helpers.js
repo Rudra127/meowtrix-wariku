@@ -52,3 +52,17 @@ export const buildApp = async () => {
   await expressApp(app);
   return app;
 };
+
+/**
+ * Per-file test database. `node --test` runs files in parallel, so two files sharing one
+ * database wipe each other's data. Each Mongo-backed test file gets `<db>_<suffix>`.
+ * Returns undefined when TEST_MONGODB_URI isn't set (those suites skip).
+ */
+export const testMongoUri = (suffix) => {
+  const base = process.env.TEST_MONGODB_URI;
+  if (!base) return undefined;
+  const url = new URL(base);
+  const db = url.pathname.replace(/^\//, "") || "wariku_test";
+  url.pathname = `/${db}_${suffix}`;
+  return url.toString();
+};

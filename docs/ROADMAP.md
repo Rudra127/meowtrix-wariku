@@ -9,35 +9,59 @@ conventions (see root `AGENTS.md`) — refine them as you build, and update this
 
 ## 1. Learn — "Duolingo for finance"
 
+**Status:** MVP shipped (Sep 2026). Backend (`/learn/*` + seed content + server-side grading + XP/streak
++ cascade delete) plus mobile (LearnScreen on real data, full lesson player with all 4 exercise types,
+inline results with XP + streak) are all live. Next up is content depth (more units/lessons) and the
+"later" list below (hearts/lives, leagues, placement quiz, AI-generated practice).
+
 **Goal:** short daily lessons that build real money skills, with game mechanics that bring people back.
 
 **MVP**
-- A learning **path**: Units (e.g. "Budgeting basics") → Lessons → 5–10 exercises each.
-- Exercise types: multiple choice, true/false, fill-in-the-number, order-the-steps.
-- Instant feedback per exercise with a one-line explanation.
-- **XP** per lesson, **daily streak**, lesson completion state.
+- A learning **path**: Units (e.g. "Budgeting basics") → Lessons → 5–10 exercises each. ✅ backend
+- Exercise types: multiple choice, true/false, fill-in-the-number, order-the-steps. ✅ backend
+- Instant feedback per exercise with a one-line explanation. ✅ backend (`/submit` returns `results`)
+- **XP** per lesson, **daily streak**, lesson completion state. ✅ backend
 
 **Later:** hearts/lives, leagues, spaced-repetition review, placement quiz, AI-generated practice questions
 (DeepSeek via backend), personalised path from onboarding goals.
 
-**Suggested models** (`backend/database/models/`)
-```js
-Unit          { slug, title, description, order, isPublished }
-Lesson        { unitId, slug, title, order, xp, exercises: [{ type, prompt, options?, answer, explanation }] }
-LessonProgress{ userId, lessonId, completedAt, score, attempts }            // unique (userId, lessonId)
-LearnerStats  { userId, xp, currentStreak, longestStreak, lastActiveDate }   // unique userId
+**Shipped models** (`backend/database/models/`)
 ```
-Content can start as seed JSON in `backend/database/seed/` loaded by a script.
+Unit           { slug, title, description, order, icon, isPublished }
+Lesson         { unitId, slug, title, summary, order, xp, estimatedMinutes, icon,
+                 exercises: [{ type, prompt, options?, answer, tolerance?, explanation }] }
+LessonProgress { userId, lessonId, score, xpEarned, attempts, passed,
+                 firstCompletedAt, lastAttemptAt }                          // unique (userId, lessonId)
+LearnerStats   { userId, xp, currentStreak, longestStreak, lastActiveDate,
+                 todayDate, todayXp, dailyGoalXp, lessonsDone,
+                 totalAnswers, correctAnswers, badges }                     // unique userId
+```
+Content is authored in `backend/database/seed/learn-content.js` and loaded by
+`npm run seed:learn` (idempotent upsert by slug).
 
-**Suggested endpoints**
-- `GET  /api/v1/learn/path` → units with lessons + the user's completion state
-- `GET  /api/v1/learn/lessons/:id` → lesson with exercises (**omit answers** in the response)
-- `POST /api/v1/learn/lessons/:id/submit` `{ answers }` → graded result, XP earned, updated streak
-  (grade on the server so answers can't be read from the app)
-- `GET  /api/v1/learn/stats` → xp, streaks
+**Shipped endpoints** (all `protect`, all filtered by `req.user._id`; see `backend/AGENTS.md`
+for full response shapes)
+- `GET  /api/v1/learn/path` — units + lessons + user status (recommended unit first)
+- `GET  /api/v1/learn/lessons/:slug` — lesson with exercises (**answers stripped**; 403 if locked)
+- `POST /api/v1/learn/lessons/:slug/submit { answers }` — server-side grading, XP delta, updated stats
+- `GET  /api/v1/learn/stats` — xp, streak, dailyGoal, accuracy
 
-**Mobile:** `src/features/learn/` — PathScreen (tab root), LessonPlayer (full-screen stack route, one
-exercise at a time, progress bar), ResultScreen (XP + streak animation).
+Grading is entirely server-side so answers never travel to the client. `xpEarned` on a lesson
+can only rise across attempts (retries award the delta, never claw XP back). Streaks advance
+on any submit, using UTC-day boundaries. Cascade delete is wired via
+`UserService._cascadeDelete → LearnService.deleteAllForUser` on account deletion.
+
+**Shipped mobile pieces** (`mobile/src/features/learn/`)
+- Hooks in `useLearn.ts`: `useLearningPath()`, `useLearnerStats()`, `useLessonDetail(slug)`,
+  `useSubmitLesson(slug)` — TanStack Query with `queryKeys.learn.*` for invalidation.
+- `LearnScreen.tsx` renders the personalised path straight from `GET /learn/path` (no more
+  client-side reorder). `LessonNode.tsx` is untouched; `sampleData.ts` is now a thin type shim.
+- `LessonPlayerScreen.tsx` — full-screen player, one exercise at a time, per-type input
+  renderers (multiple choice / true-false / fill-number / order-steps), server-side grading on
+  submit, then an inline results view with per-exercise feedback + explanation + XP + streak.
+- Route: `app/lesson/[slug].tsx`, registered as a top-level `Stack.Screen` inside the signed-in
+  protected block in `app/_layout.tsx` (hides the tab bar for an immersive experience).
+- `ProfileScreen` reads real streak/XP/badges via `useLearnerStats()`.
 
 ---
 

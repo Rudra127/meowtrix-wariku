@@ -39,4 +39,11 @@ export const queryKeys = {
   integrations: {
     all: ['integrations'] as const,
   },
+
+  learn: {
+    all: ['learn'] as const,
+    path: ['learn', 'path'] as const,
+    stats: ['learn', 'stats'] as const,
+    lesson: (slug: string) => ['learn', 'lesson', slug] as const,
+  },
 } as const;

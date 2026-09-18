@@ -10,9 +10,10 @@ import type { Goal, Level, User } from '@/api/types';
 import { useApi } from '@/api/useApi';
 import { AppText, Avatar, Badge, Button, Card, FormError, PressableScale, Screen, SectionHeader, Sheet } from '@/components/ui';
 import { API_URL } from '@/config/env';
-import { learnerStats } from '@/features/learn/sampleData';
 import { useBrokerages } from '@/features/finance/useFinance';
 import { BrokerageCard } from '@/features/integrations/BrokerageCard';
+import { getAchievements } from '@/features/learn/gamification';
+import { useLearnerStats } from '@/features/learn/useLearn';
 import { GOAL_OPTIONS, LEVEL_OPTIONS } from '@/features/onboarding/options';
 import { OptionCard } from '@/features/onboarding/OptionCard';
 import { usePersonalization } from '@/features/onboarding/usePersonalization';
@@ -44,6 +45,11 @@ export function ProfileScreen() {
   const [editing, setEditing] = useState<'level' | 'goal' | null>(null);
   const { level, plan } = usePersonalization();
   const brokerages = useBrokerages();
+  const learnStats = useLearnerStats().data;
+  const streakDays = learnStats?.streakDays ?? 0;
+  const totalXp = learnStats?.xp ?? 0;
+  // Achievements are derived client-side (the backend `badges` counter isn't awarded yet).
+  const badges = learnStats ? getAchievements(learnStats).filter((a) => a.unlocked).length : 0;
 
   const updatePlan = useMutation({
     mutationFn: (updates: { level?: Level; goal?: Goal }) => usersApi.updateMe(api, updates),
@@ -106,11 +112,11 @@ export function ProfileScreen() {
           </View>
         </View>
         <View style={styles.heroStats}>
-          <HeroStat icon="flame" value={`${learnerStats.streakDays}`} label="Day streak" />
+          <HeroStat icon="flame" value={`${streakDays}`} label="Day streak" />
           <View style={styles.divider} />
-          <HeroStat icon="flash" value={`${learnerStats.xp}`} label="Total XP" />
+          <HeroStat icon="flash" value={`${totalXp}`} label="Total XP" />
           <View style={styles.divider} />
-          <HeroStat icon="ribbon" value={`${learnerStats.badges}`} label="Badges" />
+          <HeroStat icon="ribbon" value={`${badges}`} label="Badges" />
         </View>
       </View>
 

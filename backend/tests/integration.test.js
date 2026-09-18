@@ -13,9 +13,11 @@ import Integration from "../database/models/integration.js";
 import Transaction from "../database/models/transaction.js";
 import User from "../database/models/user.js";
 import UserService from "../services/user-service.js";
-import { buildApp, signSessionToken, testSigningKey } from "./helpers.js";
+import { buildApp, signSessionToken, testMongoUri, testSigningKey } from "./helpers.js";
 
-const uri = process.env.TEST_MONGODB_URI;
+const uri = testMongoUri("core");
+// Its own database, so the core suite's teardown can't wipe rows this suite is still using.
+const moneyUri = testMongoUri("money");
 
 describe("authenticated flow (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not set" }, () => {
   let app;
@@ -96,7 +98,7 @@ describe("authenticated flow (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not s
 // The Money tab end to end: real Mongo, real aggregation pipelines, real timezone handling.
 // These are the tests that would catch a broken index, a bad $dateToString timezone, or an
 // ownership filter someone forgot.
-describe("money endpoints (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not set" }, () => {
+describe("money endpoints (MongoDB)", { skip: !moneyUri && "TEST_MONGODB_URI not set" }, () => {
   let app;
   const clerkId = "user_money_1";
   const otherClerkId = "user_money_2";
@@ -104,7 +106,8 @@ describe("money endpoints (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not set"
   const month = () => new Date().toISOString().slice(0, 7);
 
   before(async () => {
-    if (mongoose.connection.readyState === 0) await mongoose.connect(uri);
+    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+    await mongoose.connect(moneyUri);
     await Promise.all([User.deleteMany({}), Transaction.deleteMany({}), Budget.deleteMany({}), Goal.deleteMany({}), Account.deleteMany({})]);
     await User.create({ clerkId, email: "asha@example.com", firstName: "Asha", currency: "INR", timezone: "Asia/Kolkata" });
     await User.create({ clerkId: otherClerkId, email: "bob@example.com", firstName: "Bob" });
@@ -112,7 +115,8 @@ describe("money endpoints (MongoDB)", { skip: !uri && "TEST_MONGODB_URI not set"
   });
 
   after(async () => {
-    await Promise.all([Transaction.deleteMany({}), Budget.deleteMany({}), Goal.deleteMany({}), Account.deleteMany({}), User.deleteMany({})]);
+    await mongoose.connection.dropDatabase();
+    await mongoose.disconnect();
   });
 
   it("creates a transaction and auto-provisions a default account", async () => {

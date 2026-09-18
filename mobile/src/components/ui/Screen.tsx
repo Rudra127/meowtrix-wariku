@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { colors, spacing, TAB_BAR_CLEARANCE } from '@/theme';
 
@@ -12,10 +12,13 @@ type Props = {
   tabBarSpace?: boolean;
   background?: React.ReactNode;
   contentStyle?: ViewStyle;
+  /** Pull-to-refresh (scroll screens only). */
+  refreshing?: boolean;
+  onRefresh?: () => void;
 };
 
 /** Standard screen container: canvas color, safe area, keyboard avoidance, padding. */
-export function Screen({ children, scroll = true, edges = ['top'], tabBarSpace, background, contentStyle }: Props) {
+export function Screen({ children, scroll = true, edges = ['top'], tabBarSpace, background, contentStyle, refreshing, onRefresh }: Props) {
   const bottom = tabBarSpace ? { paddingBottom: TAB_BAR_CLEARANCE } : null;
   return (
     <View style={styles.root}>
@@ -28,6 +31,11 @@ export function Screen({ children, scroll = true, edges = ['top'], tabBarSpace, 
               contentContainerStyle={[styles.content, bottom, contentStyle]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              refreshControl={
+                onRefresh ? (
+                  <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+                ) : undefined
+              }
             >
               {children}
             </ScrollView>

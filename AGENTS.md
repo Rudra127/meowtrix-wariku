@@ -10,15 +10,17 @@ A mobile app that makes people better with money. Three main tabs:
 
 | Tab | Route | What it is | Status |
 |---|---|---|---|
-| **Learn** | `mobile/app/(tabs)/index.tsx` | Duolingo-style finance lessons: units → lessons → quizzes, XP, streaks | UI done, sample data |
+| **Learn** | `mobile/app/(tabs)/index.tsx` | Duolingo-style finance lessons: units → lessons → quizzes, XP, streaks | **Done** — end-to-end (backend + seeded content + full player + results) |
 | **Money** | `mobile/app/(tabs)/money.tsx` | Personal finance: **voice-first** entry, budgets, goals, monthly dashboard | **Done (live data)** |
-| **Ask AI** | `mobile/app/(tabs)/ask.tsx` | Finance assistant on **DeepSeek** with **tool calling** — answers from the user's real finances + Zerodha holdings | **Done (grounded)** |
-| Profile | `mobile/app/(tabs)/profile.tsx` | Account, connected accounts (Zerodha), backend status, sign out, delete account | Done |
+| **Ask AI** | `mobile/app/(tabs)/ask.tsx` | Finance assistant on **DeepSeek** with **tool calling** — answers from the user's real finances + broker holdings | **Done (grounded)** |
+| Profile | `mobile/app/(tabs)/profile.tsx` | Account, connected accounts (Upstox/Zerodha), backend status, sign out, delete account | Done |
 
 First run: a 2-question onboarding (experience level + main goal) personalises every tab and the AI's tone.
 
 **What's done:** the skeleton (Clerk auth end-to-end, user sync into MongoDB, typed API client, DeepSeek
-client, design system) plus the **Money** and **Ask AI** features.
+client, design system) plus all three features — **Learn**, **Money** and **Ask AI**.
+- **Learn** — units → lessons → exercises with server-side grading, XP, streaks and a full lesson player.
+  Content is seeded (`npm run seed:learn`); progress and stats live on `/api/v1/learn/*`.
 - **Money** — add income/expenses by **voice**: the user speaks, the backend transcribes (`/finance/voice`)
   and an LLM extracts transactions, then the user confirms before anything is saved. Manual quick-add,
   budgets, savings goals and a timezone-correct monthly dashboard are all live on `/api/v1/finance/*`.
@@ -41,6 +43,7 @@ Both features degrade gracefully without these; see each app's `.env.example`.
     Connect requires a **paid** developer app.
   Without any of these the cards show "not available". Each redirect URL must exactly match the one
   registered on that broker's app (and in dev be your LAN IP, not `localhost`).
+- Learn content must be seeded once: `cd backend && npm run seed:learn`.
 
 ## Repo map
 

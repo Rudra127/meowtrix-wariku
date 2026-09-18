@@ -9,6 +9,7 @@ import UserRepository, {
   fieldsFromClerkWebhook,
 } from "../database/repository/user-repository.js";
 import { isTimeZone } from "../utils/dates.js";
+import LearnService from "./learn-service.js";
 import { NotFoundError, ValidationError } from "../utils/index.js";
 
 // Fields a user may change on their own profile via PATCH /users/me.
@@ -25,16 +26,21 @@ const SELF_EDITABLE = {
 
 export default class UserService {
   /**
-   * The extra repositories exist only for the account-deletion cascade (`#purgeUserData`).
+   * The extra dependencies exist only for the account-deletion cascade (`#purgeUserData`).
    * They're constructor arguments so tests can assert the cascade ran without a database.
    */
   constructor(
     repository = new UserRepository(),
-    { financeRepository = new FinanceRepository(), integrationRepository = new IntegrationRepository() } = {}
+    {
+      financeRepository = new FinanceRepository(),
+      integrationRepository = new IntegrationRepository(),
+      learnService = new LearnService(),
+    } = {}
   ) {
     this.repository = repository;
     this.financeRepository = financeRepository;
     this.integrationRepository = integrationRepository;
+    this.learnService = learnService;
   }
 
   /**
@@ -104,31 +110,15 @@ export default class UserService {
    * Deletes the account everywhere: Clerk (identity + sessions) and our DB (all app data).
    *
    * Order matters. Clerk goes first so the user's sessions are revoked immediately — if our own
-   * cleanup then fails halfway, they cannot keep using a half-deleted account. `#purgeUserData`
+   * cleanup then fails halfway, they cannot keep using a half-deleted account. `_cascadeDelete`
    * runs before the User row so a crash leaves orphaned children discoverable by userId rather
    * than silently unreachable.
    */
   async deleteMe(clerkId) {
     const user = await this.repository.findByClerkId(clerkId);
     await clerkClient.users.deleteUser(clerkId);
-    if (user) await this.#purgeUserData(user._id);
+    if (user) await this._cascadeDelete(user._id);
     await this.repository.deleteByClerkId(clerkId);
-  }
-
-  /**
-   * Removes every document that hangs off a user.
-   *
-   * ADDING A FEATURE WITH USER-OWNED DATA? Add its repository here, or deleting an account will
-   * leave that data behind — which breaks both the App Store / Play Store deletion requirement and
-   * any "right to erasure" promise.
-   */
-  async #purgeUserData(userId) {
-    await Promise.all([
-      // Accounts, transactions, budgets, goals.
-      this.financeRepository.deleteAllForUser(userId),
-      // Broker links — these hold encrypted access tokens, so leaving them is a real risk.
-      this.integrationRepository.deleteAllForUser(userId),
-    ]);
   }
 
   async list(query) {
@@ -151,7 +141,25 @@ export default class UserService {
   async handleClerkUserDeleted(data) {
     if (!data?.id) return;
     const user = await this.repository.findByClerkId(data.id);
-    if (user) await this.#purgeUserData(user._id);
+    if (user) await this._cascadeDelete(user._id);
     await this.repository.deleteByClerkId(data.id);
+  }
+
+  /**
+   * Fan-out cleanup for per-user data across every feature. Called on account deletion.
+   *
+   * ADDING A FEATURE WITH USER-OWNED DATA? Add it here, or deleting an account will leave that data
+   * behind — which breaks both the App Store / Play Store deletion requirement and any
+   * "right to erasure" promise.
+   */
+  async _cascadeDelete(userId) {
+    await Promise.all([
+      // Learn: lesson progress + learner stats.
+      this.learnService.deleteAllForUser(userId),
+      // Money: accounts, transactions, budgets, goals.
+      this.financeRepository.deleteAllForUser(userId),
+      // Broker links — these hold encrypted access tokens, so leaving them is a real risk.
+      this.integrationRepository.deleteAllForUser(userId),
+    ]);
   }
 }

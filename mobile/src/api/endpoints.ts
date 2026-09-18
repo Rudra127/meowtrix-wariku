@@ -5,6 +5,9 @@
 import type { ApiClient, UploadFile } from './client';
 import type {
   Account,
+  AnswerCheck,
+  BrokerLoginUrl,
+  BrokerProvider,
   BudgetStatus,
   ChatMessage,
   ChatResponse,
@@ -13,9 +16,12 @@ import type {
   FinanceSummary,
   Goal,
   GoalItem,
-  BrokerLoginUrl,
-  BrokerProvider,
   IntegrationStatus,
+  LearnPath,
+  LearnerStats,
+  LessonAnswer,
+  LessonDetail,
+  LessonSubmitResult,
   Level,
   SeriesPeriod,
   Transaction,
@@ -161,4 +167,19 @@ export const integrationsApi = {
     api.get<BrokerLoginUrl>(`/integrations/${provider}/login-url`),
   disconnect: (api: ApiClient, provider: BrokerProvider) =>
     api.delete<{ disconnected: true }>(`/integrations/${provider}`),
+};
+
+export const learnApi = {
+  /** Full path + stats for the Learn tab. Units come back in personalised order. */
+  path: (api: ApiClient) => api.get<LearnPath>('/learn/path'),
+  /** Just the stats block (streak, XP, daily goal, accuracy). */
+  stats: (api: ApiClient) => api.get<{ stats: LearnerStats }>('/learn/stats'),
+  /** Lesson with exercises — answers, explanations and tolerances are stripped by the server. */
+  lesson: (api: ApiClient, slug: string) => api.get<LessonDetail>(`/learn/lessons/${slug}`),
+  /** Instant feedback for one answer while playing (stores nothing). */
+  check: (api: ApiClient, slug: string, index: number, answer: LessonAnswer) =>
+    api.post<AnswerCheck>(`/learn/lessons/${slug}/check`, { index, answer }),
+  /** Grade a submission server-side. `answers` is one entry per exercise, in order. */
+  submit: (api: ApiClient, slug: string, answers: LessonAnswer[]) =>
+    api.post<LessonSubmitResult>(`/learn/lessons/${slug}/submit`, { answers }),
 };
